@@ -8,18 +8,18 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked.map((config) => ({
     ...config,
-    files: ["packages/**/src/**/*.ts", "packages/**/test/**/*.ts"],
+    files: ["packages/**/src/**/*.ts", "packages/**/test/**/*.ts", "examples/**/src/**/*.ts"],
     languageOptions: {
       ...config.languageOptions,
       parserOptions: {
         ...config.languageOptions?.parserOptions,
-        project: ["./packages/*/tsconfig.test.json"],
+        project: ["./packages/*/tsconfig.test.json", "./examples/*/tsconfig.json"],
         tsconfigRootDir: import.meta.dirname
       }
     }
   })),
   {
-    files: ["packages/**/src/**/*.ts"],
+    files: ["packages/**/src/**/*.ts", "examples/**/src/**/*.ts"],
     rules: {
       "@typescript-eslint/consistent-type-imports": [
         "error",

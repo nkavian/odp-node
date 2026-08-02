@@ -394,7 +394,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
       ...(safeAttributes === undefined ? {} : { attributes: safeAttributes }),
       ...(attributeSchema === undefined ? {} : { attribute_schema: attributeSchema.schema }),
       ...(normalized.actions === undefined ? {} : { actions: normalized.actions }),
-      issues
+      ...(issues.length === 0 ? {} : { issues })
     };
   }
 
