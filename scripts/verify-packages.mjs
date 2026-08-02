@@ -10,7 +10,7 @@ const root = path.resolve(import.meta.dirname, "..");
 const copyright = "Copyright (c) 2026 Offering Discovery Protocol";
 const packages = {
   agent: ["@offering-protocol/core", "@offering-protocol/directory"],
-  core: [],
+  core: ["ajv", "ajv-formats"],
   directory: ["@offering-protocol/core"],
   service: ["@offering-protocol/core"]
 };
@@ -37,7 +37,7 @@ async function verifyPackage(directory, expectedDependencies) {
 
   const dependencies = Object.keys(manifest.dependencies ?? {}).sort();
   if (JSON.stringify(dependencies) !== JSON.stringify(expectedDependencies)) {
-    throw new Error(`${directory}: unexpected ODP dependency graph`);
+    throw new Error(`${directory}: unexpected dependency graph`);
   }
 
   const license = await readFile(path.join(packageRoot, "LICENSE"), "utf8");
