@@ -37,7 +37,8 @@
   "license": "MIT",
   "dependencies": {
     "@offering-protocol/core": "workspace:^",
-    "@offering-protocol/directory": "workspace:^"
+    "@offering-protocol/directory": "workspace:^",
+    "http-cache-semantics": "^4.2.0"
   },
   "publishConfig": {
     "access": "public",
@@ -47,5 +48,8 @@
     "type": "git",
     "url": "git+https://github.com/offering-protocol/odp-node.git",
     "directory": "packages/agent"
+  },
+  "devDependencies": {
+    "@types/http-cache-semantics": "^4.2.0"
   }
 }
