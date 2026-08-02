@@ -1,0 +1,22 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/agent/src/index.ts",
+    "packages/core/src/index.ts",
+    "packages/directory/src/index.ts",
+    "packages/service/src/index.ts"
+  ],
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "githubPages": false,
+  "out": "docs/api",
+  "readme": "README.md",
+  "treatWarningsAsErrors": true,
+  "tsconfig": "tsconfig.docs.json",
+  "validation": {
+    "invalidLink": true,
+    "notDocumented": false,
+    "notExported": true
+  }
+}
