@@ -2,6 +2,33 @@
 
 Agent-oriented composition across directory discovery and per-Service catalog discovery.
 
+## Discover Offerings Across Services
+
+`createOdpAgent` searches the canonical directory and then searches each matching Service. Results
+are emitted in directory order, while Service requests run with bounded concurrency. A failed
+Service produces an `issue` event without discarding results from other Services.
+
+```ts
+import { createOdpAgent } from "@offering-protocol/agent";
+
+const agent = createOdpAgent({ environment: "sandbox" });
+
+for await (const event of agent.searchOfferingsAcrossServices({
+  services: { filters: { keywords: ["gpu"] } },
+  offerings: { filters: [{ id: "region", operator: "eq", value: "us-west" }] }
+})) {
+  if (event.type === "offering") useOffering(event.service, event.offering);
+  else reportServiceIssue(event.service, event.issue);
+}
+```
+
+The defaults search at most 10 Services, retain at most 10 terse Offerings per Service, and run four
+Service searches concurrently. Callers can lower or raise those bounds within the documented
+limits. The directory endpoint remains fixed by the selected production or sandbox environment.
+
+Applications can supply `serviceClient` to configure authentication, payment-capable transport,
+localization, persistent caching, or access-context cache partitions for each discovered Service.
+
 ## Inspect a Service
 
 `inspectService` retrieves `/.well-known/odp`, validates the Service Document, and returns the
