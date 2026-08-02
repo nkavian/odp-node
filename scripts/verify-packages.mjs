@@ -9,12 +9,18 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
 const copyright = "Copyright (c) 2026 Offering Discovery Protocol";
 const packages = {
-  agent: ["@offering-protocol/core", "@offering-protocol/directory"],
+  agent: ["@offering-protocol/core", "@offering-protocol/directory", "http-cache-semantics"],
   core: ["ajv", "ajv-formats"],
   directory: ["@offering-protocol/core"],
   service: ["@offering-protocol/core"]
 };
-const requiredFiles = ["dist/index.cjs", "dist/index.d.ts", "dist/index.js", "LICENSE", "README.md"];
+const requiredFiles = [
+  "dist/index.cjs",
+  "dist/index.d.ts",
+  "dist/index.js",
+  "LICENSE",
+  "README.md"
+];
 
 async function exists(candidate) {
   try {
@@ -29,7 +35,8 @@ async function verifyPackage(directory, expectedDependencies) {
   const manifest = JSON.parse(await readFile(path.join(packageRoot, "package.json"), "utf8"));
   const expectedName = `@offering-protocol/${directory}`;
 
-  if (manifest.name !== expectedName) throw new Error(`${directory}: expected package name ${expectedName}`);
+  if (manifest.name !== expectedName)
+    throw new Error(`${directory}: expected package name ${expectedName}`);
   if (manifest.license !== "MIT") throw new Error(`${directory}: expected MIT license`);
   if (manifest.publishConfig?.access !== "public" || manifest.publishConfig?.provenance !== true) {
     throw new Error(`${directory}: public provenance publication is required`);
