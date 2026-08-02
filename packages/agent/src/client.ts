@@ -3,14 +3,21 @@ import {
   parseCollection,
   parseCollectionSearchRequest,
   parseFilterDefinitionPage,
+  parseOffering,
+  parseOfferingSearchRequest,
+  parseOfferingSearchResponse,
   parsePage,
   parseSortDefinitionPage,
   resolveContinuation,
   type Collection,
   type CollectionSearchRequest,
+  type Offering,
+  type OfferingPage,
+  type OfferingSearchRequest,
   type PageEnvelope,
   type Representation,
-  type TerseCollection
+  type TerseCollection,
+  type TerseOffering
 } from "@offering-protocol/core";
 
 import { resolveSearchCapabilities, type SearchCapabilityCatalog } from "./capabilities.js";
@@ -36,6 +43,7 @@ export interface OdpServiceClientOptions extends Omit<
 export interface OdpCacheFallbacks {
   serviceDocumentMs?: number;
   collectionMs?: number;
+  offeringMs?: number;
   searchMs?: number;
   searchDefinitionMs?: number;
 }
@@ -62,6 +70,24 @@ export interface CollectionGetOptions {
   representation?: Representation;
   signal?: AbortSignal;
 }
+
+export type OfferingListOptions = CollectionListOptions;
+
+export interface OfferingSearchOptions {
+  query?: string;
+  filters?: OfferingSearchRequest["filters"];
+  collection_id?: string;
+  include_descendants?: boolean;
+  sort?: string;
+  refinements?: string[];
+  limit?: number;
+  representation?: Representation;
+  maxPages?: number;
+  maxItems?: number;
+  signal?: AbortSignal;
+}
+
+export type OfferingGetOptions = CollectionGetOptions;
 
 export interface CollectionSequence<Item> {
   items: AsyncIterable<Item>;
@@ -94,6 +120,38 @@ export interface OdpServiceClient {
     id: string,
     options?: { signal?: AbortSignal }
   ): Promise<SearchCapabilityCatalog>;
+  listOfferings(
+    options?: OfferingListOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseOffering>;
+  listOfferings(
+    options: OfferingListOptions & { representation: "full" }
+  ): CollectionSequence<Offering>;
+  listCollectionOfferings(
+    collectionId: string,
+    options?: OfferingListOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseOffering>;
+  listCollectionOfferings(
+    collectionId: string,
+    options: OfferingListOptions & { representation: "full" }
+  ): CollectionSequence<Offering>;
+  searchOfferings(
+    options: OfferingSearchOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseOffering>;
+  searchOfferings(
+    options: OfferingSearchOptions & { representation: "full" }
+  ): CollectionSequence<Offering>;
+  getOffering(
+    id: string,
+    options?: OfferingGetOptions & { representation?: "full" }
+  ): Promise<Offering>;
+  getOffering(
+    id: string,
+    options: OfferingGetOptions & { representation: "terse" }
+  ): Promise<TerseOffering>;
+  getOfferingSearchCapabilities(
+    collectionId?: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<SearchCapabilityCatalog>;
 }
 
 export function createOdpServiceClient(options: OdpServiceClientOptions): OdpServiceClient {
@@ -107,6 +165,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
   const fallbacks = {
     serviceDocumentMs: options.cacheFallbacks?.serviceDocumentMs ?? 14_400_000,
     collectionMs: options.cacheFallbacks?.collectionMs ?? 3_600_000,
+    offeringMs: options.cacheFallbacks?.offeringMs ?? 300_000,
     searchMs: options.cacheFallbacks?.searchMs ?? 0,
     searchDefinitionMs: options.cacheFallbacks?.searchDefinitionMs ?? 3_600_000
   };
@@ -153,6 +212,125 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     };
   };
 
+  const offeringSequence = <Item>(
+    operation: "list-offerings" | "list-collection-offerings" | "search-offerings",
+    request: OfferingListOptions | OfferingSearchOptions,
+    collectionId?: string,
+    body?: OfferingSearchRequest
+  ): CollectionSequence<Item> => {
+    const pages = (): AsyncGenerator<OfferingPage<Item>> =>
+      offeringPages<Item>(
+        inspect,
+        transport,
+        operation,
+        request,
+        initialPageSize,
+        options.acceptLanguage,
+        catalogCache,
+        cachePartition,
+        fallbacks,
+        collectionId,
+        body
+      );
+    return {
+      pages: { [Symbol.asyncIterator]: pages },
+      items: itemIterable(pages, request.maxItems)
+    };
+  };
+
+  function listOfferings(
+    request?: OfferingListOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseOffering>;
+  function listOfferings(
+    request: OfferingListOptions & { representation: "full" }
+  ): CollectionSequence<Offering>;
+  function listOfferings(
+    request: OfferingListOptions = {}
+  ): CollectionSequence<TerseOffering> | CollectionSequence<Offering> {
+    return request.representation === "full"
+      ? offeringSequence<Offering>("list-offerings", request)
+      : offeringSequence<TerseOffering>("list-offerings", request);
+  }
+
+  function listCollectionOfferings(
+    collectionId: string,
+    request?: OfferingListOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseOffering>;
+  function listCollectionOfferings(
+    collectionId: string,
+    request: OfferingListOptions & { representation: "full" }
+  ): CollectionSequence<Offering>;
+  function listCollectionOfferings(
+    collectionId: string,
+    request: OfferingListOptions = {}
+  ): CollectionSequence<TerseOffering> | CollectionSequence<Offering> {
+    return request.representation === "full"
+      ? offeringSequence<Offering>("list-collection-offerings", request, collectionId)
+      : offeringSequence<TerseOffering>("list-collection-offerings", request, collectionId);
+  }
+
+  function searchOfferings(
+    request: OfferingSearchOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseOffering>;
+  function searchOfferings(
+    request: OfferingSearchOptions & { representation: "full" }
+  ): CollectionSequence<Offering>;
+  function searchOfferings(
+    request: OfferingSearchOptions
+  ): CollectionSequence<TerseOffering> | CollectionSequence<Offering> {
+    const body = parseOfferingSearchRequest({
+      odp_version: "1.0",
+      ...(request.query === undefined ? {} : { query: request.query }),
+      ...(request.filters === undefined ? {} : { filters: request.filters }),
+      ...(request.collection_id === undefined ? {} : { collection_id: request.collection_id }),
+      ...(request.include_descendants === undefined
+        ? {}
+        : { include_descendants: request.include_descendants }),
+      ...(request.sort === undefined ? {} : { sort: request.sort }),
+      ...(request.refinements === undefined ? {} : { refinements: request.refinements }),
+      ...(request.limit === undefined ? {} : { limit: request.limit })
+    });
+    return request.representation === "full"
+      ? offeringSequence<Offering>("search-offerings", request, undefined, body)
+      : offeringSequence<TerseOffering>("search-offerings", request, undefined, body);
+  }
+
+  function getOffering(
+    id: string,
+    request?: OfferingGetOptions & { representation?: "full" }
+  ): Promise<Offering>;
+  function getOffering(
+    id: string,
+    request: OfferingGetOptions & { representation: "terse" }
+  ): Promise<TerseOffering>;
+  async function getOffering(
+    id: string,
+    request: OfferingGetOptions = {}
+  ): Promise<Offering | TerseOffering> {
+    const inspected = requireOperation(await inspect(), "get-offering");
+    const url = buildOdpOperationUrl(
+      inspected.document.http.endpoint_base,
+      "get-offering",
+      inspected.serviceOrigin,
+      id
+    );
+    addRepresentation(url, request.representation);
+    const value = await requestOdpValue(
+      transport,
+      url,
+      requestInit("GET", request.signal),
+      options.acceptLanguage,
+      catalogCache,
+      cachePartition,
+      "offering",
+      fallbacks.offeringMs,
+      parseOffering
+    );
+    return request.representation === "terse"
+      ? parseOfferingItem(value, "1.0", false)
+      : parseOffering(value);
+  }
+
   return {
     inspect,
     listCollections(request = {}) {
@@ -198,30 +376,53 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
         representation: "full",
         ...(request.signal === undefined ? {} : { signal: request.signal })
       });
-      return resolveSearchCapabilities({
-        inspection: inspected,
-        collection: collection.search_capabilities,
-        ...(request.signal === undefined ? {} : { signal: request.signal }),
-        async loadPage(kind, href, signal) {
-          const url = resolveContinuation(href, inspected.serviceOrigin);
-          const parser = kind === "filters" ? parseFilterDefinitionPage : parseSortDefinitionPage;
-          return parser(
-            await requestOdpValue(
-              transport,
-              url,
-              requestInit("GET", signal),
-              options.acceptLanguage,
-              catalogCache,
-              cachePartition,
-              "search-definition",
-              fallbacks.searchDefinitionMs,
-              parser
-            )
-          );
-        }
-      });
+      return resolveCapabilities(inspected, collection.search_capabilities, request.signal);
+    },
+    listOfferings,
+    listCollectionOfferings,
+    searchOfferings,
+    getOffering,
+    async getOfferingSearchCapabilities(collectionId, request = {}) {
+      const inspected = await inspect();
+      const collection =
+        collectionId === undefined
+          ? undefined
+          : await this.getCollection(collectionId, {
+              representation: "full",
+              ...(request.signal === undefined ? {} : { signal: request.signal })
+            });
+      return resolveCapabilities(inspected, collection?.search_capabilities, request.signal);
     }
   };
+
+  function resolveCapabilities(
+    inspected: ServiceInspection,
+    collection: Collection["search_capabilities"],
+    signal?: AbortSignal
+  ): Promise<SearchCapabilityCatalog> {
+    return resolveSearchCapabilities({
+      inspection: inspected,
+      collection,
+      ...(signal === undefined ? {} : { signal }),
+      async loadPage(kind, href, pageSignal) {
+        const url = resolveContinuation(href, inspected.serviceOrigin);
+        const parser = kind === "filters" ? parseFilterDefinitionPage : parseSortDefinitionPage;
+        return parser(
+          await requestOdpValue(
+            transport,
+            url,
+            requestInit("GET", pageSignal),
+            options.acceptLanguage,
+            catalogCache,
+            cachePartition,
+            "search-definition",
+            fallbacks.searchDefinitionMs,
+            parser
+          )
+        );
+      }
+    });
+  }
 }
 
 async function* collectionPages<Item>(
@@ -284,6 +485,71 @@ async function* collectionPages<Item>(
   throw new RangeError("ODP pagination exceeded the 16-page traversal limit");
 }
 
+async function* offeringPages<Item>(
+  inspect: () => Promise<ServiceInspection>,
+  transport: OdpTransport,
+  operation: "list-offerings" | "list-collection-offerings" | "search-offerings",
+  request: OfferingListOptions | OfferingSearchOptions,
+  defaultLimit: number,
+  acceptLanguage: string | undefined,
+  cache: OdpCache | undefined,
+  cachePartition: string,
+  fallbacks: Required<OdpCacheFallbacks>,
+  collectionId?: string,
+  body?: OfferingSearchRequest
+): AsyncGenerator<OfferingPage<Item>> {
+  const inspected = requireOperation(await inspect(), operation);
+  const url = buildOdpOperationUrl(
+    inspected.document.http.endpoint_base,
+    operation,
+    inspected.serviceOrigin,
+    collectionId
+  );
+  addRepresentation(url, request.representation);
+  const limit = request.limit ?? defaultLimit;
+  requireLimit(limit, "limit");
+  let init: RequestInit =
+    operation === "search-offerings"
+      ? { ...requestInit("POST", request.signal), body: JSON.stringify({ ...body, limit }) }
+      : requestInit("GET", request.signal);
+  if (operation !== "search-offerings") url.searchParams.set("limit", String(limit));
+  const maximum = request.maxPages ?? 16;
+  requirePageLimit(maximum);
+  const visited = new Set<string>();
+  let current = url;
+  for (let count = 0; count < maximum; count += 1) {
+    const parser = operation === "search-offerings" ? parseOfferingSearchResponse : parsePage;
+    const raw = parser(
+      await requestOdpValue(
+        transport,
+        current,
+        init,
+        acceptLanguage,
+        cache,
+        cachePartition,
+        operation === "search-offerings" ? "search" : "offering",
+        operation === "search-offerings" ? fallbacks.searchMs : fallbacks.offeringMs,
+        parser
+      )
+    ) as OfferingPage;
+    if (count > 0 && raw.refinements !== undefined)
+      throw new TypeError("ODP Offering search continuation cannot contain refinements");
+    const page = {
+      ...raw,
+      items: raw.items.map((item) =>
+        parseOfferingItem(item, raw.odp_version, request.representation === "full")
+      )
+    } as OfferingPage<Item>;
+    yield page;
+    if (page.next === undefined) return;
+    if (visited.has(page.next)) throw new Error("ODP pagination loop detected");
+    visited.add(page.next);
+    current = resolveContinuation(page.next, inspected.serviceOrigin);
+    init = requestInit("GET", request.signal);
+  }
+  throw new RangeError("ODP pagination exceeded the 16-page traversal limit");
+}
+
 function itemIterable<Item>(
   pages: () => AsyncGenerator<PageEnvelope<Item>>,
   maximum?: number
@@ -306,11 +572,30 @@ function itemIterable<Item>(
 
 function requireOperation(
   inspection: ServiceInspection,
-  operation: "list-collections" | "search-collections" | "get-collection"
+  operation:
+    | "list-collections"
+    | "search-collections"
+    | "get-collection"
+    | "list-offerings"
+    | "list-collection-offerings"
+    | "search-offerings"
+    | "get-offering"
 ): ServiceInspection {
   if (!inspection.capabilities.operations.includes(operation))
     throw new Error(`ODP Service does not advertise ${operation}`);
   return inspection;
+}
+
+function parseOfferingItem(
+  value: unknown,
+  version: "1.0",
+  full: boolean
+): Offering | TerseOffering {
+  if (typeof value !== "object" || value === null) return parseOffering(value);
+  const parsed = parseOffering({ odp_version: version, ...value });
+  if (full) return parsed;
+  if ("actions" in value) throw new TypeError("ODP Terse Offering cannot contain actions");
+  return structuredClone(value) as TerseOffering;
 }
 
 function parseCollectionItem(

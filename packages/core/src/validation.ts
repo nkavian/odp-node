@@ -5,6 +5,7 @@ import type {
   CollectionSearchRequest,
   FilterDefinition,
   Offering,
+  OfferingPage,
   OfferingSearchRequest,
   PageEnvelope,
   ProblemDetails,
@@ -147,6 +148,10 @@ const offeringSearchRequest = validator<OfferingSearchRequest>(
   "https://offeringprotocol.org/schemas/offering-search-request.schema.json",
   "Offering search request"
 );
+const offeringSearchResponse = validator<OfferingPage>(
+  "https://offeringprotocol.org/schemas/offering-search-response.schema.json",
+  "Offering search response"
+);
 const filterDefinition = validator<FilterDefinition>(
   "https://offeringprotocol.org/schemas/filter-definition.schema.json",
   "Filter Definition"
@@ -180,6 +185,8 @@ export const parseCollectionSearchRequest = collectionSearchRequest.parse;
 export const safeParseCollectionSearchRequest = collectionSearchRequest.safeParse;
 export const parseOfferingSearchRequest = offeringSearchRequest.parse;
 export const safeParseOfferingSearchRequest = offeringSearchRequest.safeParse;
+export const parseOfferingSearchResponse = offeringSearchResponse.parse;
+export const safeParseOfferingSearchResponse = offeringSearchResponse.safeParse;
 export const parseFilterDefinition = filterDefinition.parse;
 export const safeParseFilterDefinition = filterDefinition.safeParse;
 export const parseSortDefinition = sortDefinition.parse;

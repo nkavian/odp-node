@@ -67,3 +67,24 @@ each consumer to stop without advancing or buffering the other.
 `getCollectionSearchCapabilities` returns validated Filter Definitions, Sort Definitions with their
 filters resolved, and scoped `issues`. Callers do not need to retrieve linked definition pages,
 merge Service and Collection scopes, or resolve sort references.
+
+## Discover Offerings
+
+The same client lists all accessible Offerings, lists direct members of one Collection, performs
+structured Offering search, retrieves Offering details, and resolves the effective search
+capabilities for either the Service or one Collection.
+
+```ts
+const results = odp.searchOfferings({
+  collection_id: "compute",
+  filters: [{ id: "region", operator: "eq", value: "us-west" }],
+  refinements: ["region"]
+});
+
+for await (const offering of results.items) {
+  useOffering(offering);
+}
+```
+
+Offering retrieval uses a five-minute fallback freshness when the response does not supply HTTP
+cache metadata. Search responses retain the explicit-freshness-only behavior described above.
