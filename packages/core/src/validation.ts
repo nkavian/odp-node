@@ -1,0 +1,179 @@
+import type { ErrorObject } from "ajv";
+
+import type {
+  Collection,
+  CollectionSearchRequest,
+  Offering,
+  OfferingSearchRequest,
+  PageEnvelope,
+  ProblemDetails,
+  ResourceIdentity,
+  ServiceDocument
+} from "./models.js";
+import { ajv } from "./schema-registry.js";
+
+const LANGUAGE_TAG = /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/u;
+
+export interface ValidationIssue {
+  path: string;
+  keyword: string;
+  message: string;
+  params: Readonly<Record<string, unknown>>;
+}
+
+export type SafeParseResult<Value> =
+  { success: true; data: Value } | { success: false; issues: ValidationIssue[] };
+
+export class OdpValidationError extends Error {
+  readonly issues: ValidationIssue[];
+  readonly documentType: string;
+
+  constructor(documentType: string, issues: ValidationIssue[]) {
+    super(`Invalid ODP ${documentType}`);
+    this.name = "OdpValidationError";
+    this.documentType = documentType;
+    this.issues = issues;
+  }
+}
+
+function issuesFrom(errors: ErrorObject[] | null | undefined): ValidationIssue[] {
+  return (errors ?? []).map((error) => ({
+    path: error.instancePath,
+    keyword: error.keyword,
+    message: error.message ?? "Validation failed",
+    params: error.params
+  }));
+}
+
+function serviceDocumentIssues(value: ServiceDocument): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const add = (path: string, keyword: string, message: string): void => {
+    issues.push({ path, keyword, message, params: {} });
+  };
+
+  if ("id" in value) add("/id", "prohibited", "must not appear in a Service Document");
+  if ("web_url" in value) add("/web_url", "prohibited", "must not appear in a Service Document");
+  if (!LANGUAGE_TAG.test(value.language))
+    add("/language", "language-tag", "must be a language tag");
+
+  const folded = value.localizations.map((language) => language.toLowerCase());
+  if (value.localizations.some((language) => !LANGUAGE_TAG.test(language))) {
+    add("/localizations", "language-tag", "must contain only language tags");
+  }
+  if (new Set(folded).size !== folded.length) {
+    add("/localizations", "unique-language-tag", "must be unique without regard to case");
+  }
+  if (!folded.includes(value.language.toLowerCase())) {
+    add("/localizations", "contains-default-language", "must contain the default language");
+  }
+
+  const keywordCodePoints = value.keywords?.reduce(
+    (total, keyword) => total + Array.from(keyword).length,
+    0
+  );
+  if (keywordCodePoints !== undefined && keywordCodePoints > 1024) {
+    add("/keywords", "max-code-points", "must contain no more than 1024 code points in total");
+  }
+  if (
+    value.search_capabilities !== undefined &&
+    !value.operations.supported.includes("search-offerings")
+  ) {
+    add("/search_capabilities", "operation-support", "requires the search-offerings operation");
+  }
+  return issues;
+}
+
+function validator<Value>(
+  schemaId: string,
+  documentType: string,
+  refine?: (value: Value) => ValidationIssue[]
+) {
+  const validate = ajv.getSchema<Value>(schemaId);
+  if (validate === undefined) {
+    throw new Error(`Missing bundled ODP schema: ${schemaId}`);
+  }
+
+  const safeParse = (value: unknown): SafeParseResult<Value> => {
+    if (validate(value)) {
+      const data = value as Value;
+      const issues = refine?.(data) ?? [];
+      if (issues.length === 0) return { success: true, data };
+      return { success: false, issues };
+    }
+    return { success: false, issues: issuesFrom(validate.errors) };
+  };
+
+  const parse = (value: unknown): Value => {
+    const result = safeParse(value);
+    if (result.success) return result.data;
+    throw new OdpValidationError(documentType, result.issues);
+  };
+
+  return { parse, safeParse };
+}
+
+const serviceDocument = validator<ServiceDocument>(
+  "https://offeringprotocol.org/schemas/service-document.schema.json",
+  "Service Document",
+  serviceDocumentIssues
+);
+const collection = validator<Collection>(
+  "https://offeringprotocol.org/schemas/collection.schema.json",
+  "Collection"
+);
+const offering = validator<Offering>(
+  "https://offeringprotocol.org/schemas/offering.schema.json",
+  "Offering"
+);
+const problemDetails = validator<ProblemDetails>(
+  "https://offeringprotocol.org/schemas/problem-details.schema.json",
+  "Problem Details"
+);
+const resourceIdentity = validator<ResourceIdentity>(
+  "https://offeringprotocol.org/schemas/resource-identity.schema.json",
+  "resource identity"
+);
+const page = validator<PageEnvelope>(
+  "https://offeringprotocol.org/schemas/page-envelope.schema.json",
+  "page envelope"
+);
+const collectionSearchRequest = validator<CollectionSearchRequest>(
+  "https://offeringprotocol.org/schemas/collection-search-request.schema.json",
+  "Collection search request"
+);
+const offeringSearchRequest = validator<OfferingSearchRequest>(
+  "https://offeringprotocol.org/schemas/offering-search-request.schema.json",
+  "Offering search request"
+);
+
+export const parseServiceDocument = serviceDocument.parse;
+export const safeParseServiceDocument = serviceDocument.safeParse;
+export const parseCollection = collection.parse;
+export const safeParseCollection = collection.safeParse;
+export const parseOffering = offering.parse;
+export const safeParseOffering = offering.safeParse;
+export const parseProblemDetails = problemDetails.parse;
+export const safeParseProblemDetails = problemDetails.safeParse;
+export const parseResourceIdentity = resourceIdentity.parse;
+export const safeParseResourceIdentity = resourceIdentity.safeParse;
+export const parsePage = page.parse;
+export const safeParsePage = page.safeParse;
+export const parseCollectionSearchRequest = collectionSearchRequest.parse;
+export const safeParseCollectionSearchRequest = collectionSearchRequest.safeParse;
+export const parseOfferingSearchRequest = offeringSearchRequest.parse;
+export const safeParseOfferingSearchRequest = offeringSearchRequest.safeParse;
+
+export function parseProblemResponse(value: unknown, httpStatus: number): ProblemDetails {
+  const problem = parseProblemDetails(value);
+  if (problem.status !== httpStatus) {
+    throw new OdpValidationError("Problem Details", [
+      {
+        path: "/status",
+        keyword: "http-status",
+        message: "must match the HTTP response status",
+        params: { httpStatus }
+      }
+    ]);
+  }
+  return problem;
+}
