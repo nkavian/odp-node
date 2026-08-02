@@ -1,3 +1,4 @@
+export * from "./agent.js";
 export * from "./cache.js";
 export type {
   CapabilityIssue,
