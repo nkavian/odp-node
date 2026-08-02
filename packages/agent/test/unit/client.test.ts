@@ -428,7 +428,7 @@ describe("ODP Service Offering client", () => {
     });
   });
 
-  it("retrieves a Full Offering with an object Schema Reference", async () => {
+  it("returns validated attributes with their bundled Attribute Schema", async () => {
     const transport = transportFor((url) =>
       url.pathname === "/.well-known/odp"
         ? response(service)
@@ -440,10 +440,159 @@ describe("ODP Service Offering client", () => {
             attributes: { memory: 80 }
           })
     );
-    await expect(client(transport).getOffering("gpu")).resolves.toMatchObject({
+    const supportingTransport = transportFor((url) =>
+      response(
+        url.pathname.endsWith("memory.json")
+          ? {
+              $schema: "https://json-schema.org/draft/2020-12/schema",
+              type: "number"
+            }
+          : {
+              $schema: "https://json-schema.org/draft/2020-12/schema",
+              type: "object",
+              required: ["memory"],
+              properties: { memory: { $ref: "memory.json" } }
+            },
+        200,
+        "application/schema+json"
+      )
+    );
+    await expect(
+      createOdpServiceClient({
+        serviceUrl: "https://example.com",
+        transport,
+        supportingTransport
+      }).getOffering("gpu")
+    ).resolves.toMatchObject({
       id: "gpu",
-      schema: { url: "/schemas/gpu" }
+      attributes: { memory: 80 },
+      attribute_schema: { type: "object" },
+      issues: []
     });
+    expect(supportingTransport).toHaveBeenCalledTimes(2);
+  });
+
+  it("quarantines attributes that fail their Attribute Schema", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({
+            odp_version: "1.0",
+            id: "gpu",
+            name: "GPU",
+            schema: { url: "/schemas/gpu" },
+            attributes: { memory: "eighty" }
+          })
+    );
+    const supportingTransport = transportFor(() =>
+      response(
+        {
+          $schema: "https://json-schema.org/draft/2020-12/schema",
+          type: "object",
+          properties: { memory: { type: "number" } }
+        },
+        200,
+        "application/schema+json"
+      )
+    );
+    const offering = await createOdpServiceClient({
+      serviceUrl: "https://example.com",
+      transport,
+      supportingTransport
+    }).getOffering("gpu");
+    expect(offering).not.toHaveProperty("attributes");
+    expect(offering.issues).toEqual([
+      {
+        scope: "attributes",
+        message: "Offering attributes do not match their Attribute Schema"
+      }
+    ]);
+  });
+
+  it("normalizes Actions without eagerly retrieving their supporting documents", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({
+            odp_version: "1.0",
+            id: "gpu",
+            name: "GPU",
+            actions: [
+              { id: "rent", rel: "purchase", http: { href: "/rentals", method: "POST" } },
+              {
+                id: "quote",
+                rel: "quote",
+                openapi: { url: "/openapi.json", operation_id: "createQuote" }
+              }
+            ]
+          })
+    );
+    const supportingTransport = transportFor(() => {
+      throw new Error("supporting document retrieval must remain lazy");
+    });
+    const offering = await createOdpServiceClient({
+      serviceUrl: "https://example.com",
+      transport,
+      supportingTransport
+    }).getOffering("gpu");
+    expect(offering.actions).toEqual([
+      {
+        id: "rent",
+        rel: "purchase",
+        target: { kind: "http", url: "https://example.com/rentals", method: "POST" }
+      },
+      {
+        id: "quote",
+        rel: "quote",
+        target: {
+          kind: "openapi",
+          url: "https://example.com/openapi.json",
+          operation_id: "createQuote"
+        }
+      }
+    ]);
+    expect(supportingTransport).not.toHaveBeenCalled();
+  });
+
+  it("lazily resolves an OpenAPI Action to exactly one operation", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({
+            odp_version: "1.0",
+            id: "gpu",
+            name: "GPU",
+            actions: [
+              {
+                id: "quote",
+                rel: "quote",
+                openapi: { url: "/openapi.json", operation_id: "createQuote" }
+              }
+            ]
+          })
+    );
+    const supportingTransport = transportFor(() =>
+      response(
+        {
+          openapi: "3.1.1",
+          info: { title: "Quote API", version: "1.0.0" },
+          paths: {
+            "/quotes": {
+              post: { operationId: "createQuote", responses: { "200": { description: "OK" } } }
+            }
+          }
+        },
+        200,
+        "application/vnd.oai.openapi+json;version=3.1"
+      )
+    );
+    const resolved = await createOdpServiceClient({
+      serviceUrl: "https://example.com",
+      transport,
+      supportingTransport
+    }).resolveAction("gpu", "quote");
+    expect(resolved.action.target.kind).toBe("openapi");
+    expect("operation" in resolved && resolved.operation["operationId"]).toBe("createQuote");
   });
 });
 

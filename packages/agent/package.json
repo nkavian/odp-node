@@ -36,8 +36,13 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@apidevtools/json-schema-ref-parser": "^15.5.1",
+    "@hyperjump/browser": "^1.4.0",
+    "@hyperjump/json-schema": "^1.17.7",
     "@offering-protocol/core": "workspace:^",
     "@offering-protocol/directory": "workspace:^",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
     "http-cache-semantics": "^4.2.0"
   },
   "publishConfig": {

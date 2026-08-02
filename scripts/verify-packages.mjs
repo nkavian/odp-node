@@ -9,7 +9,16 @@ const execFileAsync = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
 const copyright = "Copyright (c) 2026 Offering Discovery Protocol";
 const packages = {
-  agent: ["@offering-protocol/core", "@offering-protocol/directory", "http-cache-semantics"],
+  agent: [
+    "@apidevtools/json-schema-ref-parser",
+    "@hyperjump/browser",
+    "@hyperjump/json-schema",
+    "@offering-protocol/core",
+    "@offering-protocol/directory",
+    "ajv",
+    "ajv-formats",
+    "http-cache-semantics"
+  ],
   core: ["ajv", "ajv-formats"],
   directory: ["@offering-protocol/core"],
   service: ["@offering-protocol/core"]

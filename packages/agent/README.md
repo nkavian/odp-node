@@ -88,3 +88,27 @@ for await (const offering of results.items) {
 
 Offering retrieval uses a five-minute fallback freshness when the response does not supply HTTP
 cache metadata. Search responses retain the explicit-freshness-only behavior described above.
+
+Full Offering retrieval resolves and bundles the referenced JSON Schema, validates `attributes`,
+and returns the self-contained schema as `attribute_schema`. Invalid or unavailable attributes are
+omitted and described in the result's scoped `issues` array. Terse retrieval does not perform this
+enrichment.
+
+Action targets are normalized to absolute URLs during full Offering retrieval. Their supporting
+documents remain lazy: `resolveAction(offeringId, actionId)` resolves a compact request schema or
+validates an OpenAPI 3.1 document and selects its unique `operation_id`. It never invokes the
+Action.
+
+```ts
+const offering = await odp.getOffering("gpu-h100");
+
+if (offering.actions?.some(({ id }) => id === "quote")) {
+  const quote = await odp.resolveAction(offering.id, "quote");
+  inspectAction(quote);
+}
+```
+
+Attribute Schema and OpenAPI retrieval uses `supportingTransport`, which defaults to anonymous
+`fetch` rather than the catalog `transport`. This keeps payment and onboarding credentials out of
+supporting-document requests. Both transports may share the client's cache; supporting resources
+use an anonymous cache partition.

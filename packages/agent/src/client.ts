@@ -9,6 +9,7 @@ import {
   parsePage,
   parseSortDefinitionPage,
   resolveContinuation,
+  resolveResourceReference,
   type Collection,
   type CollectionSearchRequest,
   type Offering,
@@ -27,6 +28,14 @@ import {
   type ServiceInspection
 } from "./inspection.js";
 import { createInMemoryOdpCache, type OdpCache } from "./cache.js";
+import { resolveOpenApiOperation } from "./openapi.js";
+import {
+  normalizeActions,
+  type OfferingDetails,
+  type OfferingIssue,
+  type ResolvedAction
+} from "./offerings.js";
+import { resolveSchema } from "./schemas.js";
 import { requestOdpValue, type OdpTransport } from "./transport.js";
 
 export interface OdpServiceClientOptions extends Omit<
@@ -35,6 +44,7 @@ export interface OdpServiceClientOptions extends Omit<
 > {
   serviceUrl: string | URL;
   transport?: OdpTransport;
+  supportingTransport?: OdpTransport;
   initialPageSize?: number;
   cacheFallbacks?: OdpCacheFallbacks;
   cachePartition?: string;
@@ -143,7 +153,7 @@ export interface OdpServiceClient {
   getOffering(
     id: string,
     options?: OfferingGetOptions & { representation?: "full" }
-  ): Promise<Offering>;
+  ): Promise<OfferingDetails>;
   getOffering(
     id: string,
     options: OfferingGetOptions & { representation: "terse" }
@@ -152,10 +162,16 @@ export interface OdpServiceClient {
     collectionId?: string,
     options?: { signal?: AbortSignal }
   ): Promise<SearchCapabilityCatalog>;
+  resolveAction(
+    offeringId: string,
+    actionId: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<ResolvedAction>;
 }
 
 export function createOdpServiceClient(options: OdpServiceClientOptions): OdpServiceClient {
   const transport = options.transport ?? globalThis.fetch;
+  const supportingTransport = options.supportingTransport ?? globalThis.fetch;
   const cache = options.cache ?? createInMemoryOdpCache();
   if (options.cachePartition !== undefined && options.cachePartition.length === 0)
     throw new RangeError("cachePartition must not be empty");
@@ -298,7 +314,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
   function getOffering(
     id: string,
     request?: OfferingGetOptions & { representation?: "full" }
-  ): Promise<Offering>;
+  ): Promise<OfferingDetails>;
   function getOffering(
     id: string,
     request: OfferingGetOptions & { representation: "terse" }
@@ -306,7 +322,16 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
   async function getOffering(
     id: string,
     request: OfferingGetOptions = {}
-  ): Promise<Offering | TerseOffering> {
+  ): Promise<OfferingDetails | TerseOffering> {
+    const { offering, url } = await getOfferingWire(id, request);
+    if (request.representation === "terse") return parseOfferingItem(offering, "1.0", false);
+    return enrichOffering(offering, url, request.signal);
+  }
+
+  async function getOfferingWire(
+    id: string,
+    request: OfferingGetOptions
+  ): Promise<{ offering: Offering; url: URL }> {
     const inspected = requireOperation(await inspect(), "get-offering");
     const url = buildOdpOperationUrl(
       inspected.document.http.endpoint_base,
@@ -315,20 +340,62 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
       id
     );
     addRepresentation(url, request.representation);
-    const value = await requestOdpValue(
-      transport,
-      url,
-      requestInit("GET", request.signal),
-      options.acceptLanguage,
-      catalogCache,
-      cachePartition,
-      "offering",
-      fallbacks.offeringMs,
-      parseOffering
+    const offering = parseOffering(
+      await requestOdpValue(
+        transport,
+        url,
+        requestInit("GET", request.signal),
+        options.acceptLanguage,
+        catalogCache,
+        cachePartition,
+        "offering",
+        fallbacks.offeringMs,
+        parseOffering
+      )
     );
-    return request.representation === "terse"
-      ? parseOfferingItem(value, "1.0", false)
-      : parseOffering(value);
+    return { offering, url };
+  }
+
+  async function enrichOffering(
+    offering: Offering,
+    offeringUrl: URL,
+    signal?: AbortSignal
+  ): Promise<OfferingDetails> {
+    const { actions: wireActions, attributes, ...envelope } = offering;
+    const normalized = normalizeActions(wireActions, offeringUrl.origin);
+    const issues: OfferingIssue[] = [...normalized.issues];
+    let safeAttributes = attributes;
+    let attributeSchema: Awaited<ReturnType<typeof resolveSchema>> | undefined;
+    if (offering.schema !== undefined) {
+      try {
+        attributeSchema = await resolveSchema({
+          url: resolveResourceReference(offering.schema.url, offeringUrl),
+          transport: supportingTransport,
+          cache,
+          ...(signal === undefined ? {} : { signal })
+        });
+        if (attributes !== undefined && !attributeSchema.validate(attributes)) {
+          safeAttributes = undefined;
+          issues.push({
+            scope: "attributes",
+            message: "Offering attributes do not match their Attribute Schema"
+          });
+        }
+      } catch (error) {
+        safeAttributes = undefined;
+        issues.push({
+          scope: "attribute_schema",
+          message: error instanceof Error ? error.message : "Attribute Schema resolution failed"
+        });
+      }
+    }
+    return {
+      ...envelope,
+      ...(safeAttributes === undefined ? {} : { attributes: safeAttributes }),
+      ...(attributeSchema === undefined ? {} : { attribute_schema: attributeSchema.schema }),
+      ...(normalized.actions === undefined ? {} : { actions: normalized.actions }),
+      issues
+    };
   }
 
   return {
@@ -382,6 +449,41 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     listCollectionOfferings,
     searchOfferings,
     getOffering,
+    async resolveAction(offeringId, actionId, request = {}) {
+      const { offering, url } = await getOfferingWire(offeringId, {
+        representation: "full",
+        ...(request.signal === undefined ? {} : { signal: request.signal })
+      });
+      const normalized = normalizeActions(offering.actions, url.origin);
+      const action = normalized.actions?.find(({ id }) => id === actionId);
+      if (action === undefined)
+        throw new Error(`ODP Offering does not expose usable Action ${actionId}`);
+      if (action.target.kind === "http") {
+        const httpAction = { ...action, target: action.target };
+        const reference = action.target.request?.schema;
+        if (reference === undefined) return { action: httpAction };
+        const resolved = await resolveSchema({
+          url: resolveResourceReference(reference.url, url),
+          transport: supportingTransport,
+          cache,
+          ...(request.signal === undefined ? {} : { signal: request.signal })
+        });
+        return { action: httpAction, request_schema: resolved.schema };
+      }
+      const openApiAction = { ...action, target: action.target };
+      const resolved = await resolveOpenApiOperation({
+        url: new URL(action.target.url),
+        operationId: action.target.operation_id,
+        transport: supportingTransport,
+        cache,
+        ...(request.signal === undefined ? {} : { signal: request.signal })
+      });
+      return {
+        action: openApiAction,
+        openapi_document: resolved.document,
+        operation: resolved.operation
+      };
+    },
     async getOfferingSearchCapabilities(collectionId, request = {}) {
       const inspected = await inspect();
       const collection =
@@ -586,6 +688,9 @@ function requireOperation(
   return inspection;
 }
 
+function parseOfferingItem(value: unknown, version: "1.0", full: true): Offering;
+function parseOfferingItem(value: unknown, version: "1.0", full: false): TerseOffering;
+function parseOfferingItem(value: unknown, version: "1.0", full: boolean): Offering | TerseOffering;
 function parseOfferingItem(
   value: unknown,
   version: "1.0",
