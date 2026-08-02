@@ -1,3 +1,53 @@
 # `@offering-protocol/directory`
 
-The canonical production and sandbox directory client for Service discovery.
+The official client for canonical Offering Discovery Protocol Service discovery.
+
+The package has two environments and no configurable base URL:
+
+- `createDirectoryClient()` uses `https://directory.offeringprotocol.org`.
+- `createDirectoryClient({ environment: "sandbox" })` uses
+  `https://sandbox.offeringprotocol.org`.
+
+A fetch-compatible `transport` can be injected for testing without changing the selected origin.
+
+## Search for Services
+
+Directory search covers cached Service metadata, not Service catalogs. Filter values within one
+category use OR semantics; different categories combine with AND semantics. The initial page can
+include facets for keywords, onboarding protocols, payment protocols, and ODP operations.
+
+```ts
+import { createDirectoryClient } from "@offering-protocol/directory";
+
+const directory = createDirectoryClient();
+const results = directory.searchServices({
+  query: "GPU compute",
+  filters: {
+    keywords: ["gpu", "accelerator"],
+    payments: ["mpp"]
+  },
+  limit: 25
+});
+
+for await (const service of results.items) {
+  useService(service.service_origin);
+}
+```
+
+`items` and `pages` are independent lazy traversals. Each begins with `POST /v1/services/search` and
+retrieves opaque continuation links with `GET`. Continuations and redirects must remain on the
+selected canonical origin. `maxPages` defaults to 16, and callers can apply an independent
+`maxItems` bound.
+
+Every result contains the Service origin, cached Service Document metadata, and `indexed_at`, which
+records when that directory entry was refreshed. The agent should inspect the live Service before
+navigating its Collections or Offerings.
+
+## Suggestions
+
+`suggestServices` returns bounded lexical suggestions for a prefix. Natural-language interpretation
+is not required by the directory contract.
+
+```ts
+const suggestions = await directory.suggestServices({ prefix: "gp", limit: 10 });
+```

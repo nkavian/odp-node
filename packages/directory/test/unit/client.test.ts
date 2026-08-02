@@ -1,0 +1,128 @@
+import { describe, expect, it, vi } from "vitest";
+
+import { createDirectoryClient } from "../../src/index.js";
+
+const service = {
+  service_origin: "https://compute.example",
+  name: "Compute",
+  description: "GPU compute",
+  language: "en",
+  localizations: ["en"],
+  keywords: ["gpu"],
+  operations: ["list-offerings", "get-offering"],
+  protocols: { payments: ["mpp"] },
+  indexed_at: "2026-08-02T00:00:00Z"
+};
+
+function inputUrl(input: string | URL | Request): string {
+  return input instanceof Request ? input.url : String(input);
+}
+
+function response(value: unknown, status = 200): Response {
+  return new Response(JSON.stringify(value), {
+    status,
+    headers: { "content-type": "application/json" }
+  });
+}
+
+describe("Directory client", () => {
+  it("uses the canonical production origin and sends structured filters", async () => {
+    let requestUrl = "";
+    let body: unknown;
+    const transport = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      requestUrl = inputUrl(input);
+      body = JSON.parse(typeof init?.body === "string" ? init.body : "null");
+      return Promise.resolve(
+        response({
+          items: [service],
+          facets: { keywords: [{ value: "gpu", count: 1 }] }
+        })
+      );
+    });
+    const search = createDirectoryClient({ transport }).searchServices({
+      query: "compute",
+      filters: { keywords: ["gpu", "accelerator"], payments: ["mpp"] },
+      limit: 25
+    });
+    let keywordFacet: unknown;
+    for await (const page of search.pages) {
+      keywordFacet = page.facets?.keywords?.[0];
+      break;
+    }
+    expect(requestUrl).toBe("https://directory.offeringprotocol.org/v1/services/search");
+    expect(body).toEqual({
+      query: "compute",
+      filters: { keywords: ["gpu", "accelerator"], payments: ["mpp"] },
+      limit: 25
+    });
+    expect(keywordFacet).toEqual({ value: "gpu", count: 1 });
+  });
+
+  it("uses sandbox only when explicitly selected", async () => {
+    let requestUrl = "";
+    const transport = vi.fn((input: string | URL | Request) => {
+      requestUrl = inputUrl(input);
+      return Promise.resolve(response({ items: [] }));
+    });
+    const client = createDirectoryClient({ environment: "sandbox", transport });
+    await client.searchServices().pages[Symbol.asyncIterator]().next();
+    expect(client.environment).toBe("sandbox");
+    expect(requestUrl).toBe("https://sandbox.offeringprotocol.org/v1/services/search");
+  });
+
+  it("follows opaque continuation links with GET", async () => {
+    const methods: string[] = [];
+    const transport = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      methods.push(init?.method ?? "GET");
+      const url = new URL(inputUrl(input));
+      return Promise.resolve(
+        url.searchParams.has("cursor")
+          ? response({ items: [{ ...service, service_origin: "https://storage.example" }] })
+          : response({ items: [service], next: "/v1/services/search?cursor=opaque" })
+      );
+    });
+    const origins = [];
+    for await (const item of createDirectoryClient({ transport }).searchServices().items)
+      origins.push(item.service_origin);
+    expect(origins).toEqual(["https://compute.example", "https://storage.example"]);
+    expect(methods).toEqual(["POST", "GET"]);
+  });
+
+  it("retrieves bounded suggestions from the selected environment", async () => {
+    let requestUrl = "";
+    const transport = vi.fn((input: string | URL | Request) => {
+      requestUrl = inputUrl(input);
+      return Promise.resolve(response({ items: ["gpu", "gpu compute"] }));
+    });
+    const values = await createDirectoryClient({
+      environment: "sandbox",
+      transport
+    }).suggestServices({
+      prefix: "gp",
+      limit: 5
+    });
+    expect(values).toEqual(["gpu", "gpu compute"]);
+    expect(requestUrl).toBe(
+      "https://sandbox.offeringprotocol.org/v1/services/suggestions?prefix=gp&limit=5"
+    );
+  });
+
+  it("rejects cross-origin continuations and preserves HTTP failure details", async () => {
+    const crossOrigin = vi.fn(() =>
+      Promise.resolve(response({ items: [], next: "https://other.example/search" }))
+    );
+    const iterator = createDirectoryClient({ transport: crossOrigin })
+      .searchServices()
+      .pages[Symbol.asyncIterator]();
+    await iterator.next();
+    await expect(iterator.next()).rejects.toThrow("canonical origin");
+
+    const unavailable = vi.fn(() => Promise.resolve(response({ message: "Unavailable" }, 503)));
+    await expect(
+      createDirectoryClient({ transport: unavailable })
+        .searchServices()
+        .pages[Symbol.asyncIterator]()
+        .next()
+    ).rejects.toMatchObject({ status: 503 });
+  });
+});

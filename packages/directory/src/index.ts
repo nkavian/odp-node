@@ -1,1 +1,420 @@
 export {};
+import { Buffer } from "node:buffer";
+
+import {
+  parseServiceDocument,
+  type OdpOperation,
+  type ServiceProtocols
+} from "@offering-protocol/core";
+
+export const DIRECTORY_ORIGINS = Object.freeze({
+  production: "https://directory.offeringprotocol.org",
+  sandbox: "https://sandbox.offeringprotocol.org"
+});
+
+export type DirectoryEnvironment = keyof typeof DIRECTORY_ORIGINS;
+export type DirectoryTransport = typeof globalThis.fetch;
+
+export interface DirectoryClientOptions {
+  environment?: DirectoryEnvironment;
+  transport?: DirectoryTransport;
+}
+
+export interface DirectoryServiceFilters {
+  keywords?: string[];
+  onboarding?: "aep"[];
+  operations?: OdpOperation[];
+  payments?: ("mpp" | "x402")[];
+}
+
+export interface DirectorySearchRequest {
+  query?: string;
+  filters?: DirectoryServiceFilters;
+  limit?: number;
+}
+
+export interface DirectoryIterationOptions {
+  maxItems?: number;
+  maxPages?: number;
+  signal?: AbortSignal;
+}
+
+export interface DirectoryService extends Record<string, unknown> {
+  service_origin: string;
+  name: string;
+  description: string;
+  language: string;
+  localizations: string[];
+  keywords?: string[];
+  operations: OdpOperation[];
+  protocols?: ServiceProtocols;
+  indexed_at: string;
+}
+
+export interface DirectoryFacet<Value extends string = string> {
+  value: Value;
+  count: number;
+}
+
+export interface DirectoryFacets {
+  keywords?: DirectoryFacet[];
+  onboarding?: DirectoryFacet<"aep">[];
+  operations?: DirectoryFacet<OdpOperation>[];
+  payments?: DirectoryFacet<"mpp" | "x402">[];
+}
+
+export interface DirectorySearchPage extends Record<string, unknown> {
+  items: DirectoryService[];
+  next?: string;
+  facets?: DirectoryFacets;
+}
+
+export interface DirectorySearchSequence {
+  items: AsyncIterable<DirectoryService>;
+  pages: AsyncIterable<DirectorySearchPage>;
+}
+
+export interface DirectorySuggestionRequest {
+  prefix: string;
+  limit?: number;
+  signal?: AbortSignal;
+}
+
+export interface DirectoryClient {
+  readonly environment: DirectoryEnvironment;
+  searchServices(
+    request?: DirectorySearchRequest,
+    options?: DirectoryIterationOptions
+  ): DirectorySearchSequence;
+  suggestServices(request: DirectorySuggestionRequest): Promise<string[]>;
+}
+
+export class DirectoryRequestError extends Error {
+  readonly headers: Headers;
+  constructor(
+    readonly status: number,
+    message: string,
+    headers: Headers
+  ) {
+    super(message);
+    this.name = "DirectoryRequestError";
+    this.headers = new Headers(headers);
+  }
+}
+
+const MAXIMUM_BYTES = 524_288;
+const MAXIMUM_PAGES = 16;
+const MEDIA_TYPE = "application/json";
+const OPERATIONS = [
+  "list-collections",
+  "search-collections",
+  "get-collection",
+  "list-collection-offerings",
+  "list-offerings",
+  "search-offerings",
+  "get-offering"
+] as const satisfies readonly OdpOperation[];
+
+export function createDirectoryClient(options: DirectoryClientOptions = {}): DirectoryClient {
+  const environment = options.environment ?? "production";
+  const origin = DIRECTORY_ORIGINS[environment];
+  const transport = options.transport ?? globalThis.fetch;
+
+  return {
+    environment,
+    searchServices(request = {}, iteration = {}) {
+      const body = validateSearchRequest(request);
+      const maxPages = boundedInteger(iteration.maxPages ?? MAXIMUM_PAGES, "maxPages", 1, 16);
+      const maxItems = optionalInteger(iteration.maxItems, "maxItems", 1, 10_000);
+      const pages = () => searchPages(body, maxPages, iteration.signal);
+      return {
+        pages: { [Symbol.asyncIterator]: pages },
+        items: {
+          async *[Symbol.asyncIterator]() {
+            let count = 0;
+            for await (const page of pages()) {
+              for (const item of page.items) {
+                if (maxItems !== undefined && count >= maxItems) return;
+                count += 1;
+                yield item;
+              }
+            }
+          }
+        }
+      };
+    },
+    async suggestServices(request) {
+      const prefix = requireText(request.prefix, "prefix", 1, 128);
+      const limit = optionalInteger(request.limit, "limit", 1, 25);
+      const url = new URL("/v1/services/suggestions", origin);
+      url.searchParams.set("prefix", prefix);
+      if (limit !== undefined) url.searchParams.set("limit", String(limit));
+      const value = await requestJson(url, {
+        method: "GET",
+        ...(request.signal === undefined ? {} : { signal: request.signal })
+      });
+      return parseSuggestions(value);
+    }
+  };
+
+  async function* searchPages(
+    body: DirectorySearchRequest,
+    maxPages: number,
+    signal?: AbortSignal
+  ): AsyncGenerator<DirectorySearchPage> {
+    let url = new URL("/v1/services/search", origin);
+    let init: RequestInit = {
+      method: "POST",
+      body: JSON.stringify(body),
+      ...(signal === undefined ? {} : { signal })
+    };
+    for (let pageNumber = 0; pageNumber < maxPages; pageNumber += 1) {
+      const page = parseSearchPage(await requestJson(url, init));
+      yield page;
+      if (page.next === undefined) return;
+      url = continuationUrl(page.next, origin);
+      init = { method: "GET", ...(signal === undefined ? {} : { signal }) };
+    }
+  }
+
+  async function requestJson(url: URL, init: RequestInit): Promise<unknown> {
+    const headers = new Headers(init.headers);
+    headers.set("accept", MEDIA_TYPE);
+    if (init.body !== undefined) headers.set("content-type", MEDIA_TYPE);
+    let current = url;
+    let request = { ...init, headers, redirect: "manual" as const };
+    let response: Response | undefined;
+    for (let redirects = 0; redirects <= 5; redirects += 1) {
+      response = await transport(current, request);
+      if (![301, 302, 303, 307, 308].includes(response.status)) break;
+      if (redirects === 5) throw new Error("Directory response exceeded its redirect limit");
+      const location = response.headers.get("location");
+      if (location === null) throw new Error("Directory redirect omitted Location");
+      const next = new URL(location, current);
+      if (next.origin !== origin) throw new Error("Directory redirect changed origin");
+      if (
+        response.status === 303 ||
+        ((response.status === 301 || response.status === 302) && request.method === "POST")
+      )
+        request = { method: "GET", headers, redirect: "manual" };
+      current = next;
+    }
+    if (response === undefined) throw new Error("Directory request produced no response");
+    if (!response.ok) {
+      const message = await boundedText(response).catch(() => "");
+      throw new DirectoryRequestError(
+        response.status,
+        message === "" ? `Directory request failed with HTTP ${response.status}` : message,
+        response.headers
+      );
+    }
+    const mediaType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+    if (mediaType !== MEDIA_TYPE)
+      throw new TypeError("Directory response must use application/json");
+    const text = await boundedText(response);
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new TypeError("Directory response must contain valid JSON");
+    }
+  }
+}
+
+function validateSearchRequest(request: DirectorySearchRequest): DirectorySearchRequest {
+  const query =
+    request.query === undefined ? undefined : requireText(request.query, "query", 1, 512);
+  const limit = optionalInteger(request.limit, "limit", 1, 100);
+  const filters = request.filters === undefined ? undefined : validateFilters(request.filters);
+  return {
+    ...(query === undefined ? {} : { query }),
+    ...(filters === undefined ? {} : { filters }),
+    ...(limit === undefined ? {} : { limit })
+  };
+}
+
+function validateFilters(filters: DirectoryServiceFilters): DirectoryServiceFilters {
+  return {
+    ...(filters.keywords === undefined
+      ? {}
+      : { keywords: uniqueText(filters.keywords, "keywords", 32, 64) }),
+    ...(filters.onboarding === undefined
+      ? {}
+      : { onboarding: requireEnumArray(filters.onboarding, "onboarding", ["aep"] as const) }),
+    ...(filters.operations === undefined
+      ? {}
+      : {
+          operations: requireEnumArray(filters.operations, "operations", OPERATIONS)
+        }),
+    ...(filters.payments === undefined
+      ? {}
+      : { payments: requireEnumArray(filters.payments, "payments", ["mpp", "x402"] as const) })
+  };
+}
+
+function parseSearchPage(value: unknown): DirectorySearchPage {
+  const object = requireObject(value, "Directory search page");
+  if (!Array.isArray(object["items"]) || object["items"].length > 100)
+    throw new TypeError("Directory search page items are invalid");
+  const items = object["items"].map(parseService);
+  const next = optionalText(object["next"], "next", 2048);
+  const facets = object["facets"] === undefined ? undefined : parseFacets(object["facets"]);
+  return {
+    ...object,
+    items,
+    ...(next === undefined ? {} : { next }),
+    ...(facets === undefined ? {} : { facets })
+  };
+}
+
+function parseService(value: unknown): DirectoryService {
+  const object = requireObject(value, "Directory Service result");
+  const serviceOrigin = requireText(object["service_origin"], "service_origin", 1, 2048);
+  const url = new URL(serviceOrigin);
+  if (url.protocol !== "https:" || url.origin !== serviceOrigin)
+    throw new TypeError("Directory Service origin must be an HTTPS origin");
+  const document = parseServiceDocument({
+    odp_version: "1.0",
+    name: object["name"],
+    description: object["description"],
+    language: object["language"],
+    localizations: object["localizations"],
+    ...(object["keywords"] === undefined ? {} : { keywords: object["keywords"] }),
+    operations: { supported: object["operations"] },
+    http: { endpoint_base: "/" },
+    ...(object["protocols"] === undefined ? {} : { protocols: object["protocols"] })
+  });
+  const indexedAt = requireText(object["indexed_at"], "indexed_at", 1, 64);
+  if (Number.isNaN(Date.parse(indexedAt))) throw new TypeError("indexed_at must be a date-time");
+  return {
+    ...object,
+    service_origin: serviceOrigin,
+    name: document.name,
+    description: document.description,
+    language: document.language,
+    localizations: document.localizations,
+    operations: document.operations.supported,
+    indexed_at: indexedAt,
+    ...(document.keywords === undefined ? {} : { keywords: document.keywords }),
+    ...(document.protocols === undefined ? {} : { protocols: document.protocols })
+  };
+}
+
+function parseFacets(value: unknown): DirectoryFacets {
+  const object = requireObject(value, "Directory facets");
+  return {
+    ...(object["keywords"] === undefined
+      ? {}
+      : { keywords: parseFacet(object["keywords"], "keywords") }),
+    ...(object["onboarding"] === undefined
+      ? {}
+      : { onboarding: parseFacet(object["onboarding"], "onboarding", ["aep"] as const) }),
+    ...(object["payments"] === undefined
+      ? {}
+      : { payments: parseFacet(object["payments"], "payments", ["mpp", "x402"] as const) }),
+    ...(object["operations"] === undefined
+      ? {}
+      : {
+          operations: parseFacet(object["operations"], "operations", OPERATIONS)
+        })
+  };
+}
+
+function parseFacet<Value extends string>(
+  value: unknown,
+  name: string,
+  allowed?: readonly Value[]
+): DirectoryFacet<Value>[] {
+  if (!Array.isArray(value) || value.length > 100)
+    throw new TypeError(`${name} facets are invalid`);
+  return value.map((entry) => {
+    const object = requireObject(entry, `${name} facet`);
+    const facetValue = requireText(object["value"], `${name} facet value`, 1, 128) as Value;
+    if (allowed !== undefined && !allowed.includes(facetValue))
+      throw new TypeError(`${name} facet value is invalid`);
+    const count = boundedInteger(
+      object["count"],
+      `${name} facet count`,
+      0,
+      Number.MAX_SAFE_INTEGER
+    );
+    return { value: facetValue, count };
+  });
+}
+
+function parseSuggestions(value: unknown): string[] {
+  const object = requireObject(value, "Directory suggestions");
+  return uniqueText(object["items"], "suggestions", 25, 128);
+}
+
+function continuationUrl(reference: string, origin: string): URL {
+  const url = new URL(reference, origin);
+  if (url.origin !== origin || url.username !== "" || url.password !== "")
+    throw new TypeError("Directory continuation must remain on the canonical origin");
+  return url;
+}
+
+async function boundedText(response: Response): Promise<string> {
+  const declared = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declared) && declared > MAXIMUM_BYTES)
+    throw new RangeError("Directory response exceeds its byte limit");
+  const text = await response.text();
+  if (Buffer.byteLength(text, "utf8") > MAXIMUM_BYTES)
+    throw new RangeError("Directory response exceeds its byte limit");
+  return text;
+}
+
+function requireObject(value: unknown, name: string): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    throw new TypeError(`${name} must be an object`);
+  return value as Record<string, unknown>;
+}
+
+function requireText(value: unknown, name: string, minimum: number, maximum: number): string {
+  if (typeof value !== "string" || value.length < minimum || value.length > maximum)
+    throw new TypeError(`${name} is invalid`);
+  if (value.trim() === "") throw new TypeError(`${name} is invalid`);
+  return value;
+}
+
+function optionalText(value: unknown, name: string, maximum: number): string | undefined {
+  return value === undefined ? undefined : requireText(value, name, 1, maximum);
+}
+
+function uniqueText(
+  value: unknown,
+  name: string,
+  maximumItems: number,
+  maximumLength: number
+): string[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > maximumItems)
+    throw new TypeError(`${name} is invalid`);
+  const values = value.map((item) => requireText(item, name, 1, maximumLength));
+  if (new Set(values).size !== values.length) throw new TypeError(`${name} must be unique`);
+  return values;
+}
+
+function requireEnumArray<const Value extends string>(
+  value: unknown,
+  name: string,
+  allowed: readonly Value[]
+): Value[] {
+  const values = uniqueText(value, name, allowed.length, 128);
+  if (values.some((item) => !allowed.includes(item as Value)))
+    throw new TypeError(`${name} is invalid`);
+  return values as Value[];
+}
+
+function optionalInteger(
+  value: unknown,
+  name: string,
+  minimum: number,
+  maximum: number
+): number | undefined {
+  return value === undefined ? undefined : boundedInteger(value, name, minimum, maximum);
+}
+
+function boundedInteger(value: unknown, name: string, minimum: number, maximum: number): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < minimum || value > maximum)
+    throw new RangeError(`${name} must be an integer from ${minimum} through ${maximum}`);
+  return value;
+}
