@@ -6,7 +6,8 @@ export type OdpCacheResourceClass =
   | "offering"
   | "search"
   | "search-definition"
-  | "attribute-schema";
+  | "attribute-schema"
+  | "openapi";
 
 export interface OdpCacheRecord<Value = unknown> {
   resourceClass: OdpCacheResourceClass;

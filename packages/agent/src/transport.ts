@@ -8,9 +8,34 @@ import type { OdpCache, OdpCacheRecord, OdpCacheResourceClass } from "./cache.js
 
 const MEDIA_TYPE = "application/odp+json";
 const MAX_BYTES = 524_288;
+const ODP_FORMAT: JsonResponseFormat = {
+  accept: MEDIA_TYPE,
+  mediaTypes: [MEDIA_TYPE],
+  maximumBytes: MAX_BYTES
+};
 const requestFlights = new WeakMap<OdpCache, Map<string, Promise<unknown>>>();
 
 export type OdpTransport = typeof globalThis.fetch;
+
+interface JsonResponseFormat {
+  accept: string;
+  mediaTypes: string[];
+  maximumBytes: number;
+}
+
+export interface SupportingJsonRequest {
+  transport: OdpTransport;
+  url: URL;
+  cache?: OdpCache;
+  cachePartition: string;
+  resourceClass: "attribute-schema" | "openapi";
+  fallbackTtlMs: number;
+  accept: string;
+  mediaTypes: string[];
+  maximumBytes: number;
+  validate?: (value: unknown) => unknown;
+  signal?: AbortSignal;
+}
 
 export class OdpRequestError extends Error {
   readonly code: string;
@@ -39,7 +64,8 @@ export async function requestOdpValue(
   cachePartition: string,
   resourceClass: OdpCacheResourceClass,
   fallbackTtlMs: number,
-  validate?: (value: unknown) => unknown
+  validate?: (value: unknown) => unknown,
+  format: JsonResponseFormat = ODP_FORMAT
 ): Promise<unknown> {
   const identity = cacheIdentity(url, init, acceptLanguage, cachePartition);
   if (identity === undefined || cache === undefined)
@@ -52,7 +78,8 @@ export async function requestOdpValue(
       cachePartition,
       resourceClass,
       fallbackTtlMs,
-      validate
+      validate,
+      format
     );
   const key = `${resourceClass}\u0000${identity}`;
   const active = requestFlights.get(cache) ?? new Map<string, Promise<unknown>>();
@@ -68,10 +95,30 @@ export async function requestOdpValue(
     cachePartition,
     resourceClass,
     fallbackTtlMs,
-    validate
+    validate,
+    format
   ).finally(() => active.delete(key));
   active.set(key, flight);
   return structuredClone(await flight);
+}
+
+export function requestSupportingJson(options: SupportingJsonRequest): Promise<unknown> {
+  return requestOdpValue(
+    options.transport,
+    options.url,
+    { method: "GET", ...(options.signal === undefined ? {} : { signal: options.signal }) },
+    undefined,
+    options.cache,
+    options.cachePartition,
+    options.resourceClass,
+    options.fallbackTtlMs,
+    options.validate,
+    {
+      accept: options.accept,
+      mediaTypes: options.mediaTypes,
+      maximumBytes: options.maximumBytes
+    }
+  );
 }
 
 async function requestUncoalesced(
@@ -83,12 +130,16 @@ async function requestUncoalesced(
   cachePartition: string,
   resourceClass: OdpCacheResourceClass,
   fallbackTtlMs: number,
-  validate?: (value: unknown) => unknown
+  validate: ((value: unknown) => unknown) | undefined,
+  format: JsonResponseFormat = ODP_FORMAT
 ): Promise<unknown> {
   const key = cacheIdentity(url, init, acceptLanguage, cachePartition);
   if (key === undefined || cache === undefined)
     return validated(
-      await responseJson(await send(transport, url, init, acceptLanguage)),
+      await responseJson(
+        await send(transport, url, init, acceptLanguage, format),
+        format.maximumBytes
+      ),
       validate
     );
   let cached = await cache.get(resourceClass, key);
@@ -102,7 +153,7 @@ async function requestUncoalesced(
   const request = {
     url: String(url),
     method: init.method ?? "GET",
-    headers: requestHeaders(acceptLanguage, init.body !== undefined)
+    headers: requestHeaders(format.accept, acceptLanguage, init.body !== undefined)
   };
   if (cached !== undefined && policy?.satisfiesWithoutRevalidation(request) === true) {
     try {
@@ -118,7 +169,8 @@ async function requestUncoalesced(
     transport,
     url,
     { ...init, headers: headersForFetch(headers) },
-    acceptLanguage
+    acceptLanguage,
+    format
   );
   if (response.status === 304) {
     if (cached === undefined || policy === undefined)
@@ -138,11 +190,12 @@ async function requestUncoalesced(
         cachePartition,
         resourceClass,
         fallbackTtlMs,
-        validate
+        validate,
+        format
       );
     }
   }
-  const value = validated(await responseJson(response), validate);
+  const value = validated(await responseJson(response, format.maximumBytes), validate);
   const received = responseMetadata(response);
   if (request.method === "POST" && !hasExplicitFreshness(received)) {
     await cache.delete(resourceClass, key);
@@ -180,10 +233,11 @@ async function send(
   transport: OdpTransport,
   url: URL,
   init: RequestInit,
-  acceptLanguage?: string
+  acceptLanguage: string | undefined,
+  format: JsonResponseFormat
 ): Promise<Response> {
   const headers = new Headers(init.headers);
-  headers.set("accept", MEDIA_TYPE);
+  headers.set("accept", format.accept);
   if (init.body !== undefined) headers.set("content-type", MEDIA_TYPE);
   if (acceptLanguage !== undefined) headers.set("accept-language", acceptLanguage);
   let current = url;
@@ -217,7 +271,8 @@ async function send(
     throw new OdpRequestError(response, problem);
   }
   if (response.status === 304) return response;
-  if (response.headers.get("content-type")?.split(";", 1)[0]?.trim() !== MEDIA_TYPE)
+  const mediaType = response.headers.get("content-type")?.split(";", 1)[0]?.trim();
+  if (mediaType === undefined || !format.mediaTypes.includes(mediaType))
     throw new TypeError("ODP response media type is invalid");
   return response;
 }
@@ -292,9 +347,13 @@ function hasExplicitFreshness(response: CachePolicy.HttpResponse): boolean {
   );
 }
 
-function requestHeaders(acceptLanguage: string | undefined, hasBody: boolean): CachePolicy.Headers {
+function requestHeaders(
+  accept: string,
+  acceptLanguage: string | undefined,
+  hasBody: boolean
+): CachePolicy.Headers {
   return {
-    accept: MEDIA_TYPE,
+    accept,
     ...(hasBody ? { "content-type": MEDIA_TYPE } : {}),
     ...(acceptLanguage === undefined ? {} : { "accept-language": acceptLanguage })
   };
