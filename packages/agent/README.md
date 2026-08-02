@@ -56,6 +56,11 @@ challenges. The client preserves response headers on `OdpRequestError` for that 
 Catalog caching is disabled for a custom transport unless `cachePartition` identifies its stable
 access context; separate principals must use separate partition values.
 
+Initial search responses are cached only when the Service supplies explicit freshness through
+`Cache-Control` or `Expires`. The cache and request coalescer distinguish the complete search body,
+representation, language, and access context. A search response without explicit freshness is not
+stored; the configurable search fallback does not make it cacheable.
+
 The `items` and `pages` iterables are independent. Iterating both starts two traversals, allowing
 each consumer to stop without advancing or buffering the other.
 
