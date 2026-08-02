@@ -1,0 +1,16 @@
+{
+  "name": "@offering-protocol/example-agent-discovery",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --sourcemap",
+    "lint": "eslint src --max-warnings 0",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@offering-protocol/agent": "workspace:^",
+    "@offering-protocol/directory": "workspace:^",
+    "@offering-protocol/examples-shared": "workspace:^"
+  }
+}

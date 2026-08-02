@@ -457,18 +457,17 @@ describe("ODP Service Offering client", () => {
         "application/schema+json"
       )
     );
-    await expect(
-      createOdpServiceClient({
-        serviceUrl: "https://example.com",
-        transport,
-        supportingTransport
-      }).getOffering("gpu")
-    ).resolves.toMatchObject({
+    const offering = await createOdpServiceClient({
+      serviceUrl: "https://example.com",
+      transport,
+      supportingTransport
+    }).getOffering("gpu");
+    expect(offering).toMatchObject({
       id: "gpu",
       attributes: { memory: 80 },
-      attribute_schema: { type: "object" },
-      issues: []
+      attribute_schema: { type: "object" }
     });
+    expect(offering).not.toHaveProperty("issues");
     expect(supportingTransport).toHaveBeenCalledTimes(2);
   });
 

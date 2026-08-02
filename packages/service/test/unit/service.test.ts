@@ -35,7 +35,7 @@ async function body(response: Response): Promise<Record<string, unknown>> {
 describe("ODP Service", () => {
   it("derives baseline operations and serves the well-known document", async () => {
     const odp = service();
-    expect(odp.document.operations.supported).toEqual(["list-offerings", "get-offering"]);
+    expect(odp.document.operations.supported).toEqual(["get-offering", "list-offerings"]);
     const response = await odp.fetch(new Request("https://example.com/.well-known/odp"));
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/odp+json");
@@ -61,9 +61,11 @@ describe("ODP Service", () => {
     const first = await body(
       await odp.fetch(new Request("https://example.com/odp/offerings?limit=1"))
     );
-    expect(first["next"]).toMatch(/^\?cursor=[0-9a-f-]+&representation=terse&limit=1$/u);
+    expect(first["next"]).toMatch(
+      /^\/odp\/offerings\?cursor=[0-9a-f-]+&representation=terse&limit=1$/u
+    );
     const second = await body(
-      await odp.fetch(new Request(`https://example.com/odp/offerings${String(first["next"])}`))
+      await odp.fetch(new Request(`https://example.com${String(first["next"])}`))
     );
     expect((second["items"] as Record<string, unknown>[])[0]?.["id"]).toBe("storage");
   });
@@ -131,7 +133,7 @@ describe("ODP Service", () => {
           })),
           ...(offset + count >= 10_000_000
             ? {}
-            : { next: `?cursor=c${offset + count}&limit=${limit}` })
+            : { next: `/odp/offerings?cursor=c${offset + count}&limit=${limit}` })
         };
       }
     );
@@ -143,7 +145,7 @@ describe("ODP Service", () => {
       await odp.fetch(new Request("https://example.com/odp/offerings?limit=3"))
     );
     expect((response["items"] as unknown[]).length).toBe(3);
-    expect(response["next"]).toBe("?cursor=c3&limit=3");
+    expect(response["next"]).toBe("/odp/offerings?cursor=c3&limit=3");
     expect(listOfferings).toHaveBeenCalledOnce();
   });
 

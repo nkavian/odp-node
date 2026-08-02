@@ -48,6 +48,45 @@ importers:
         specifier: ^3.2.6
         version: 3.2.6(@types/node@26.1.2)(yaml@2.9.0)
 
+  examples/_shared:
+    dependencies:
+      '@offering-protocol/service':
+        specifier: workspace:^
+        version: link:../../packages/service
+
+  examples/odp-agent-discovery:
+    dependencies:
+      '@offering-protocol/agent':
+        specifier: workspace:^
+        version: link:../../packages/agent
+      '@offering-protocol/directory':
+        specifier: workspace:^
+        version: link:../../packages/directory
+      '@offering-protocol/examples-shared':
+        specifier: workspace:^
+        version: link:../_shared
+
+  examples/odp-service-marketplace:
+    dependencies:
+      '@offering-protocol/core':
+        specifier: workspace:^
+        version: link:../../packages/core
+      '@offering-protocol/examples-shared':
+        specifier: workspace:^
+        version: link:../_shared
+      '@offering-protocol/service':
+        specifier: workspace:^
+        version: link:../../packages/service
+
+  examples/odp-service-small:
+    dependencies:
+      '@offering-protocol/examples-shared':
+        specifier: workspace:^
+        version: link:../_shared
+      '@offering-protocol/service':
+        specifier: workspace:^
+        version: link:../../packages/service
+
   packages/agent:
     dependencies:
       '@apidevtools/json-schema-ref-parser':

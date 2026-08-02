@@ -72,7 +72,15 @@ function page<Full, Terse>(
     items,
     ...(nextOffset >= values.length
       ? {}
-      : { next: continuation(nextOffset, request.representation, limit, continuations) })
+      : {
+          next: continuation(
+            nextOffset,
+            request.representation,
+            limit,
+            continuations,
+            request.request
+          )
+        })
   };
 }
 
@@ -80,7 +88,8 @@ function continuation(
   offset: number,
   representation: string,
   limit: number,
-  continuations: Map<string, StaticContinuation>
+  continuations: Map<string, StaticContinuation>,
+  request: Request
 ): string {
   pruneContinuations(continuations);
   const cursor = randomUUID();
@@ -95,7 +104,7 @@ function continuation(
     representation,
     limit: String(limit)
   });
-  return `?${query.toString()}`;
+  return `${new URL(request.url).pathname}?${query.toString()}`;
 }
 
 function represent<Full, Terse>(

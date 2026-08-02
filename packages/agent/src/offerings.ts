@@ -50,7 +50,7 @@ export interface OfferingDetails extends Record<string, unknown> {
   attributes?: Record<string, unknown>;
   attribute_schema?: JsonSchema;
   actions?: DiscoveredAction[];
-  issues: OfferingIssue[];
+  issues?: OfferingIssue[];
 }
 
 export interface ResolvedHttpAction {

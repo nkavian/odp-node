@@ -35,6 +35,9 @@ pnpm verify
 See [DEVELOPMENT.md](./DEVELOPMENT.md) for the repository workflow and
 [`odp-specs`](https://github.com/offering-protocol/odp-specs) for the authoritative protocol.
 
+The [runnable examples](./examples/README.md) include a small Service, a marketplace-scale Service,
+and an Agent that discovers and queries both.
+
 ## License
 
 MIT.

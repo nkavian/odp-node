@@ -104,6 +104,7 @@ export function createOdpService(options: OdpServiceOptions): OdpService {
   const operations: OdpOperation[] = ["list-offerings", "get-offering"];
   for (const operation of OPTIONAL_OPERATIONS)
     if (handlerFor(options.catalog, operation) !== undefined) operations.push(operation);
+  operations.sort();
   const document = parseServiceDocument({
     ...options.document,
     odp_version: "1.0",
