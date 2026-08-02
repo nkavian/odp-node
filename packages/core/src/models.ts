@@ -93,9 +93,13 @@ export type PricePreview =
   | { type: "quote" }
   | ({ type: string } & Record<string, unknown>);
 
+export interface SchemaReference {
+  url: string;
+}
+
 export interface ActionRequest {
   content_type?: string;
-  schema?: string;
+  schema?: SchemaReference;
 }
 
 export interface HttpActionTarget {
@@ -126,16 +130,26 @@ export interface Offering extends Record<string, unknown> {
   web_url?: string;
   collection_ids?: string[];
   price?: PricePreview;
-  schema?: string;
+  schema?: SchemaReference;
   attributes?: Record<string, unknown>;
   actions?: OfferingAction[];
 }
 
-export type TerseOffering = Omit<Offering, "actions" | "odp_version"> & {
+export interface TerseOffering extends Record<string, unknown> {
+  id: string;
+  name: string;
   odp_version?: OdpVersion;
+  description?: string;
+  language?: string;
+  localizations?: string[];
+  web_url?: string;
+  collection_ids?: string[];
+  price?: PricePreview;
+  schema?: SchemaReference;
+  attributes?: Record<string, unknown>;
   detail_fields?: string[];
   actions?: never;
-};
+}
 
 export interface PageEnvelope<Item = unknown> extends Record<string, unknown> {
   odp_version: OdpVersion;
@@ -181,4 +195,19 @@ export interface OfferingSearchRequest extends Record<string, unknown> {
   sort?: string;
   refinements?: string[];
   limit?: number;
+}
+
+export interface RefinementBucket extends Record<string, unknown> {
+  value: string | boolean | number;
+  count: number;
+  count_relation?: "lower_bound";
+}
+
+export interface RefinementGroup extends Record<string, unknown> {
+  filter_id: string;
+  values: RefinementBucket[];
+}
+
+export interface OfferingPage<Item = unknown> extends PageEnvelope<Item> {
+  refinements?: RefinementGroup[];
 }

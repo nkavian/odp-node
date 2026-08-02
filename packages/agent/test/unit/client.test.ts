@@ -16,6 +16,8 @@ const service = {
     supported: [
       "list-offerings",
       "get-offering",
+      "list-collection-offerings",
+      "search-offerings",
       "list-collections",
       "search-collections",
       "get-collection"
@@ -244,7 +246,6 @@ describe("ODP Service Collection client", () => {
   it("resolves Service and Collection capability sources for the agent", async () => {
     const advertised = {
       ...service,
-      operations: { supported: [...service.operations.supported, "search-offerings"] },
       search_capabilities: {
         filters: {
           inline: [
@@ -372,6 +373,77 @@ describe("ODP Service Collection client", () => {
     await expect(client(transport).getCollection("compute")).rejects.toThrow(
       "redirect changed origin"
     );
+  });
+});
+
+describe("ODP Service Offering client", () => {
+  it("lists Offerings and follows opaque continuation links", async () => {
+    const transport = transportFor((url) => {
+      if (url.pathname === "/.well-known/odp") return response(service);
+      if (url.searchParams.has("cursor"))
+        return response({ odp_version: "1.0", items: [{ id: "two", name: "Two" }] });
+      return response({
+        odp_version: "1.0",
+        items: [{ id: "one", name: "One" }],
+        next: "/odp/offerings?cursor=opaque"
+      });
+    });
+    const ids = [];
+    for await (const offering of client(transport).listOfferings().items) ids.push(offering.id);
+    expect(ids).toEqual(["one", "two"]);
+  });
+
+  it("uses the fixed Collection membership path", async () => {
+    let path = "";
+    const transport = transportFor((url) => {
+      if (url.pathname === "/.well-known/odp") return response(service);
+      path = url.pathname;
+      return response({ odp_version: "1.0", items: [] });
+    });
+    await client(transport).listCollectionOfferings("compute").pages[Symbol.asyncIterator]().next();
+    expect(path).toBe("/odp/collections/compute/offerings");
+  });
+
+  it("posts structured Offering search criteria", async () => {
+    let body: unknown;
+    const transport = transportFor((url, init) => {
+      if (url.pathname === "/.well-known/odp") return response(service);
+      body = JSON.parse(typeof init.body === "string" ? init.body : "null");
+      return response({ odp_version: "1.0", items: [] });
+    });
+    await client(transport)
+      .searchOfferings({
+        filters: [{ id: "region", operator: "eq", value: "us-west" }],
+        collection_id: "compute",
+        include_descendants: true,
+        refinements: ["region"]
+      })
+      .pages[Symbol.asyncIterator]()
+      .next();
+    expect(body).toMatchObject({
+      odp_version: "1.0",
+      collection_id: "compute",
+      include_descendants: true,
+      refinements: ["region"]
+    });
+  });
+
+  it("retrieves a Full Offering with an object Schema Reference", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({
+            odp_version: "1.0",
+            id: "gpu",
+            name: "GPU",
+            schema: { url: "/schemas/gpu" },
+            attributes: { memory: 80 }
+          })
+    );
+    await expect(client(transport).getOffering("gpu")).resolves.toMatchObject({
+      id: "gpu",
+      schema: { url: "/schemas/gpu" }
+    });
   });
 });
 
