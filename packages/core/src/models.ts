@@ -15,9 +15,36 @@ export interface ServiceProtocols {
   payments?: ["mpp"] | ["x402"] | ["mpp", "x402"] | ["x402", "mpp"];
 }
 
+export type FilterType =
+  "string" | "boolean" | "integer" | "number" | "decimal" | "date" | "date-time";
+export type FilterOperator = "eq" | "in" | "lt" | "lte" | "gt" | "gte" | "exists";
+export type FilterUnit =
+  { system: "ucum"; code: string } | { system: "service"; code: string; title: string };
+export interface FilterDefinition extends Record<string, unknown> {
+  id: string;
+  title: string;
+  description: string;
+  type: FilterType;
+  operators: FilterOperator[];
+  unit?: FilterUnit;
+  refinable?: true;
+}
+export interface SortKey extends Record<string, unknown> {
+  filter_id: string;
+  direction: "ascending" | "descending";
+  missing: "first" | "last";
+}
+export interface SortDefinition extends Record<string, unknown> {
+  id: string;
+  title: string;
+  description: string;
+  keys: SortKey[];
+}
+export type CapabilitySource<Value> =
+  { inline: Value[]; linked?: never } | { linked: { href: string }; inline?: never };
 export interface SearchCapabilities extends Record<string, unknown> {
-  filters?: unknown;
-  sorts?: unknown;
+  filters?: CapabilitySource<FilterDefinition>;
+  sorts?: CapabilitySource<SortDefinition>;
 }
 
 export interface ServiceDocument extends Record<string, unknown> {
@@ -45,10 +72,18 @@ export interface Collection extends Record<string, unknown> {
   search_capabilities?: SearchCapabilities;
 }
 
-export type TerseCollection = Omit<Collection, "odp_version"> & {
+export interface TerseCollection extends Record<string, unknown> {
+  id: string;
+  name: string;
   odp_version?: OdpVersion;
+  description?: string;
+  language?: string;
+  localizations?: string[];
+  parent_ids?: string[];
+  web_url?: string;
+  search_capabilities?: SearchCapabilities;
   detail_fields?: string[];
-};
+}
 
 export type PricePreview =
   | { type: "free" }

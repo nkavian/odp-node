@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   OdpValidationError,
   parseOffering,
+  parseFilterDefinition,
+  parseSortDefinition,
   parseProblemResponse,
   parseServiceDocument,
   safeParseOffering,
@@ -40,6 +42,28 @@ describe("Service Document validation", () => {
       success: false,
       issues: [{ keyword: "contains-default-language", path: "/localizations" }]
     });
+  });
+});
+
+describe("search capability validation", () => {
+  it("parses Filter and Sort Definitions", () => {
+    expect(
+      parseFilterDefinition({
+        id: "region",
+        title: "Region",
+        description: "Deployment region",
+        type: "string",
+        operators: ["eq"]
+      }).id
+    ).toBe("region");
+    expect(
+      parseSortDefinition({
+        id: "region-order",
+        title: "Region order",
+        description: "Orders by region",
+        keys: [{ filter_id: "region", direction: "ascending", missing: "last" }]
+      }).id
+    ).toBe("region-order");
   });
 });
 

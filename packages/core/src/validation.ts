@@ -3,12 +3,14 @@ import type { ErrorObject } from "ajv";
 import type {
   Collection,
   CollectionSearchRequest,
+  FilterDefinition,
   Offering,
   OfferingSearchRequest,
   PageEnvelope,
   ProblemDetails,
   ResourceIdentity,
-  ServiceDocument
+  ServiceDocument,
+  SortDefinition
 } from "./models.js";
 import { ajv } from "./schema-registry.js";
 
@@ -145,6 +147,22 @@ const offeringSearchRequest = validator<OfferingSearchRequest>(
   "https://offeringprotocol.org/schemas/offering-search-request.schema.json",
   "Offering search request"
 );
+const filterDefinition = validator<FilterDefinition>(
+  "https://offeringprotocol.org/schemas/filter-definition.schema.json",
+  "Filter Definition"
+);
+const sortDefinition = validator<SortDefinition>(
+  "https://offeringprotocol.org/schemas/sort-definition.schema.json",
+  "Sort Definition"
+);
+const filterDefinitionPage = validator<PageEnvelope<FilterDefinition>>(
+  "https://offeringprotocol.org/schemas/filter-definition-page.schema.json",
+  "Filter Definition page"
+);
+const sortDefinitionPage = validator<PageEnvelope<SortDefinition>>(
+  "https://offeringprotocol.org/schemas/sort-definition-page.schema.json",
+  "Sort Definition page"
+);
 
 export const parseServiceDocument = serviceDocument.parse;
 export const safeParseServiceDocument = serviceDocument.safeParse;
@@ -162,6 +180,14 @@ export const parseCollectionSearchRequest = collectionSearchRequest.parse;
 export const safeParseCollectionSearchRequest = collectionSearchRequest.safeParse;
 export const parseOfferingSearchRequest = offeringSearchRequest.parse;
 export const safeParseOfferingSearchRequest = offeringSearchRequest.safeParse;
+export const parseFilterDefinition = filterDefinition.parse;
+export const safeParseFilterDefinition = filterDefinition.safeParse;
+export const parseSortDefinition = sortDefinition.parse;
+export const safeParseSortDefinition = sortDefinition.safeParse;
+export const parseFilterDefinitionPage = filterDefinitionPage.parse;
+export const safeParseFilterDefinitionPage = filterDefinitionPage.safeParse;
+export const parseSortDefinitionPage = sortDefinitionPage.parse;
+export const safeParseSortDefinitionPage = sortDefinitionPage.safeParse;
 
 export function parseProblemResponse(value: unknown, httpStatus: number): ProblemDetails {
   const problem = parseProblemDetails(value);
