@@ -1,0 +1,51 @@
+{
+  "name": "@offering-protocol/agent",
+  "version": "0.0.0",
+  "description": "Agent-side directory and Service discovery workflows for ODP.",
+  "homepage": "https://www.offeringprotocol.org/",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "node": {
+        "import": "./dist/index.js",
+        "require": "./dist/index.cjs"
+      },
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "lint": "eslint src test --max-warnings 0 --no-error-on-unmatched-pattern",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "clean": "rm -rf dist .turbo coverage"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@offering-protocol/core": "workspace:^",
+    "@offering-protocol/directory": "workspace:^"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/offering-protocol/odp-node.git",
+    "directory": "packages/agent"
+  }
+}

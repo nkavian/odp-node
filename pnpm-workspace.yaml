@@ -1,0 +1,11 @@
+packages:
+  - "packages/*"
+  - "examples/*"
+
+engineStrict: true
+strictPeerDependencies: false
+autoInstallPeers: false
+confirmModulesPurge: false
+
+allowBuilds:
+  esbuild: true
