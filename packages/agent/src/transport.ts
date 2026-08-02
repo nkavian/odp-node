@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import CachePolicy from "http-cache-semantics";
 
 import { parseProblemResponse, type ProblemDetails } from "@offering-protocol/core";
@@ -39,7 +41,8 @@ export async function requestOdpValue(
   fallbackTtlMs: number,
   validate?: (value: unknown) => unknown
 ): Promise<unknown> {
-  if (init.method !== "GET" || cache === undefined)
+  const identity = cacheIdentity(url, init, acceptLanguage, cachePartition);
+  if (identity === undefined || cache === undefined)
     return requestUncoalesced(
       transport,
       url,
@@ -51,7 +54,7 @@ export async function requestOdpValue(
       fallbackTtlMs,
       validate
     );
-  const key = `${resourceClass}\u0000${cachePartition}\u0000${String(url)}\u0000${acceptLanguage ?? ""}`;
+  const key = `${resourceClass}\u0000${identity}`;
   const active = requestFlights.get(cache) ?? new Map<string, Promise<unknown>>();
   requestFlights.set(cache, active);
   const existing = active.get(key);
@@ -82,12 +85,12 @@ async function requestUncoalesced(
   fallbackTtlMs: number,
   validate?: (value: unknown) => unknown
 ): Promise<unknown> {
-  if (init.method !== "GET" || cache === undefined)
+  const key = cacheIdentity(url, init, acceptLanguage, cachePartition);
+  if (key === undefined || cache === undefined)
     return validated(
       await responseJson(await send(transport, url, init, acceptLanguage)),
       validate
     );
-  const key = `${cachePartition}\u0000${String(url)}\u0000${acceptLanguage ?? ""}`;
   let cached = await cache.get(resourceClass, key);
   let policy: CachePolicy | undefined;
   try {
@@ -96,7 +99,11 @@ async function requestUncoalesced(
     await cache.delete(resourceClass, key);
     cached = undefined;
   }
-  const request = { url: String(url), method: "GET", headers: requestHeaders(acceptLanguage) };
+  const request = {
+    url: String(url),
+    method: init.method ?? "GET",
+    headers: requestHeaders(acceptLanguage, init.body !== undefined)
+  };
   if (cached !== undefined && policy?.satisfiesWithoutRevalidation(request) === true) {
     try {
       return validated(structuredClone(cached.value), validate);
@@ -136,7 +143,12 @@ async function requestUncoalesced(
     }
   }
   const value = validated(await responseJson(response), validate);
-  const metadata = withFallback(responseMetadata(response), fallbackTtlMs);
+  const received = responseMetadata(response);
+  if (request.method === "POST" && !hasExplicitFreshness(received)) {
+    await cache.delete(resourceClass, key);
+    return value;
+  }
+  const metadata = request.method === "GET" ? withFallback(received, fallbackTtlMs) : received;
   const nextPolicy = new CachePolicy(request, metadata, { shared: false });
   const record: OdpCacheRecord = {
     resourceClass,
@@ -258,9 +270,32 @@ function validated(value: unknown, validate?: (value: unknown) => unknown): unkn
   return validate === undefined ? value : validate(value);
 }
 
-function requestHeaders(acceptLanguage?: string): CachePolicy.Headers {
+function cacheIdentity(
+  url: URL,
+  init: RequestInit,
+  acceptLanguage: string | undefined,
+  cachePartition: string
+): string | undefined {
+  const method = init.method ?? "GET";
+  const prefix = `${cachePartition}\u0000${method}\u0000${String(url)}\u0000${acceptLanguage ?? ""}\u0000`;
+  if (method === "GET") return prefix;
+  if (method !== "POST" || typeof init.body !== "string") return undefined;
+  return `${prefix}${createHash("sha256").update(init.body).digest("base64url")}`;
+}
+
+function hasExplicitFreshness(response: CachePolicy.HttpResponse): boolean {
+  const control = String(response.headers["cache-control"] ?? "").toLowerCase();
+  const expires = response.headers["expires"];
+  return (
+    /(?:^|,)\s*max-age\s*=\s*(?:"\d+"|\d+)/u.test(control) ||
+    (typeof expires === "string" && Number.isFinite(Date.parse(expires)))
+  );
+}
+
+function requestHeaders(acceptLanguage: string | undefined, hasBody: boolean): CachePolicy.Headers {
   return {
     accept: MEDIA_TYPE,
+    ...(hasBody ? { "content-type": MEDIA_TYPE } : {}),
     ...(acceptLanguage === undefined ? {} : { "accept-language": acceptLanguage })
   };
 }

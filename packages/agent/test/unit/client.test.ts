@@ -74,6 +74,115 @@ describe("ODP Service Collection client", () => {
     });
   });
 
+  it("caches explicitly fresh Collection searches and coalesces identical requests", async () => {
+    let searches = 0;
+    const transport = transportFor((url) => {
+      if (url.pathname === "/.well-known/odp") return response(service);
+      searches += 1;
+      return new Response(JSON.stringify({ odp_version: "1.0", items: [] }), {
+        headers: {
+          "cache-control": "max-age=60",
+          "content-type": "application/odp+json"
+        }
+      });
+    });
+    const odp = createOdpServiceClient({
+      serviceUrl: "https://example.com",
+      cachePartition: "agent",
+      transport
+    });
+    const first = odp.searchCollections({ query: "compute" }).pages[Symbol.asyncIterator]();
+    const second = odp.searchCollections({ query: "compute" }).pages[Symbol.asyncIterator]();
+    await Promise.all([first.next(), second.next()]);
+    await odp.searchCollections({ query: "compute" }).pages[Symbol.asyncIterator]().next();
+    expect(searches).toBe(1);
+  });
+
+  it("does not cache Collection searches without explicit freshness", async () => {
+    let searches = 0;
+    const transport = transportFor((url) => {
+      if (url.pathname === "/.well-known/odp") return response(service);
+      searches += 1;
+      return response({ odp_version: "1.0", items: [] });
+    });
+    const odp = createOdpServiceClient({
+      serviceUrl: "https://example.com",
+      cachePartition: "agent",
+      transport
+    });
+    await odp.searchCollections({ query: "compute" }).pages[Symbol.asyncIterator]().next();
+    await odp.searchCollections({ query: "compute" }).pages[Symbol.asyncIterator]().next();
+    expect(searches).toBe(2);
+  });
+
+  it("isolates cached searches by body, representation, language, and access context", async () => {
+    let searches = 0;
+    const transport = transportFor((url) => {
+      if (url.pathname === "/.well-known/odp") return response(service);
+      searches += 1;
+      return new Response(JSON.stringify({ odp_version: "1.0", items: [] }), {
+        headers: {
+          "cache-control": "max-age=60",
+          "content-type": "application/odp+json"
+        }
+      });
+    });
+    const cache = createInMemoryOdpCache();
+    const create = (cachePartition: string, acceptLanguage: string) =>
+      createOdpServiceClient({
+        serviceUrl: "https://example.com",
+        acceptLanguage,
+        cache,
+        cachePartition,
+        transport
+      });
+    const agent = create("agent-a", "en");
+    await agent.searchCollections({ query: "compute" }).pages[Symbol.asyncIterator]().next();
+    await agent.searchCollections({ query: "storage" }).pages[Symbol.asyncIterator]().next();
+    await agent
+      .searchCollections({ query: "compute", representation: "full" })
+      .pages[Symbol.asyncIterator]()
+      .next();
+    await create("agent-a", "ja")
+      .searchCollections({ query: "compute" })
+      .pages[Symbol.asyncIterator]()
+      .next();
+    await create("agent-b", "en")
+      .searchCollections({ query: "compute" })
+      .pages[Symbol.asyncIterator]()
+      .next();
+    await agent.searchCollections({ query: "compute" }).pages[Symbol.asyncIterator]().next();
+    expect(searches).toBe(5);
+  });
+
+  it("conditionally revalidates an explicitly stale Collection search", async () => {
+    let searches = 0;
+    let conditional: string | null = null;
+    const transport = transportFor((url, init) => {
+      if (url.pathname === "/.well-known/odp") return response(service);
+      searches += 1;
+      conditional = new Headers(init.headers).get("if-none-match");
+      if (conditional !== null)
+        return new Response(null, { status: 304, headers: { "cache-control": "max-age=60" } });
+      return new Response(JSON.stringify({ odp_version: "1.0", items: [] }), {
+        headers: {
+          "cache-control": "max-age=0",
+          "content-type": "application/odp+json",
+          etag: '"search-1"'
+        }
+      });
+    });
+    const odp = createOdpServiceClient({
+      serviceUrl: "https://example.com",
+      cachePartition: "agent",
+      transport
+    });
+    await odp.searchCollections({ query: "compute" }).pages[Symbol.asyncIterator]().next();
+    await odp.searchCollections({ query: "compute" }).pages[Symbol.asyncIterator]().next();
+    expect(searches).toBe(2);
+    expect(conditional).toBe('"search-1"');
+  });
+
   it("retrieves a Full Collection and requests localization", async () => {
     let headers: Headers | undefined;
     const transport = transportFor((url, init) => {
