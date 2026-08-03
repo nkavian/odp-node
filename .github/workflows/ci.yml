@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   verify:
@@ -38,6 +39,16 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
 
+      - name: Upload coverage to Codecov
+        if: matrix.node == 22
+        uses: codecov/codecov-action@v7
+        with:
+          directory: ./packages
+          fail_ci_if_error: true
+          flags: unit
+          name: node-22-unit
+          use_oidc: true
+
       - name: Run shared conformance harness
         run: pnpm conformance --specs-dir .conformance/odp-specs
 
@@ -47,6 +58,14 @@ jobs:
         with:
           name: odp-node-conformance
           path: .conformance/reports/*.json
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: odp-node-coverage-node-${{ matrix.node }}
+          path: packages/*/coverage
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Check Changesets
         if: github.event_name == 'pull_request' && github.head_ref != 'changeset-release/main' && matrix.node == 22

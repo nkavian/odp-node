@@ -1,6 +1,7 @@
 # Offering Discovery Protocol for Node.js
 
 [![CI](https://github.com/offering-protocol/odp-node/actions/workflows/ci.yml/badge.svg)](https://github.com/offering-protocol/odp-node/actions/workflows/ci.yml)
+[![Codecov](https://codecov.io/gh/offering-protocol/odp-node/graph/badge.svg)](https://codecov.io/gh/offering-protocol/odp-node)
 [![npm](https://img.shields.io/npm/v/@offering-protocol/agent?label=npm)](https://www.npmjs.com/package/@offering-protocol/agent)
 [![node](https://img.shields.io/node/v/@offering-protocol/agent)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6%2B-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
