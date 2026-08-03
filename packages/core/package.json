@@ -1,6 +1,6 @@
 {
   "name": "@offering-protocol/core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Core types, validation, and transport primitives for ODP.",
   "homepage": "https://www.offeringprotocol.org/",
   "type": "module",
