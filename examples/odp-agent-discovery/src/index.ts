@@ -7,7 +7,8 @@ import { createMockDirectory } from "./mock-directory.js";
 loadExampleEnvironment();
 
 const configuredUrls = (
-  process.env["SERVICE_URLS"] ?? "http://127.0.0.1:4101,http://127.0.0.1:4102"
+  process.env["SERVICE_URLS"] ??
+  "http://127.0.0.1:4101,http://127.0.0.1:4102,http://127.0.0.1:4103,http://127.0.0.1:4104"
 )
   .split(",")
   .map((value) => value.trim())

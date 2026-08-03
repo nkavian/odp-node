@@ -3,6 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { loadEnvFile } from "node:process";
 
 import type { OdpService } from "@offering-protocol/service";
+import type { RequestHandler } from "express";
 
 interface NodeRequestInit extends RequestInit {
   duplex: "half";
@@ -33,6 +34,34 @@ export function serveOdp(service: OdpService, label: string, route?: ExampleRout
       ].join("\n")
     );
   });
+}
+
+export function createExpressOdpHandler(service: OdpService, origin: string): RequestHandler {
+  return (request, response, next) => {
+    const path = request.path;
+    if (path !== "/.well-known/odp" && !path.startsWith("/odp/")) {
+      next();
+      return;
+    }
+    const body =
+      request.method === "GET" || request.method === "HEAD"
+        ? undefined
+        : JSON.stringify(request.body);
+    void service
+      .fetch(
+        new Request(`${origin}${request.originalUrl}`, {
+          method: request.method,
+          headers: requestHeaders(request),
+          ...(body === undefined ? {} : { body })
+        })
+      )
+      .then(async (result) => {
+        response.status(result.status);
+        result.headers.forEach((value, name) => response.setHeader(name, value));
+        response.send(Buffer.from(await result.arrayBuffer()));
+      })
+      .catch(next);
+  };
 }
 
 export function loadExampleEnvironment(): void {
@@ -100,7 +129,7 @@ async function readBody(request: IncomingMessage): Promise<Uint8Array> {
   });
 }
 
-function requestHeaders(request: IncomingMessage): Headers {
+function requestHeaders(request: Pick<IncomingMessage, "headers">): Headers {
   const headers = new Headers();
   for (const [name, value] of Object.entries(request.headers)) {
     if (Array.isArray(value)) for (const item of value) headers.append(name, item);

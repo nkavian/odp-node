@@ -7,8 +7,8 @@ The directory is explicitly a mock. `src/mock-directory.ts` probes the configure
 builds cached directory entries only for reachable Services, and implements the sandbox Service-search
 request in memory. It does not contact a deployed directory or pretend to be its implementation.
 
-Enter the example directory, copy the configuration template, and run the agent after starting one
-or both example Services:
+Enter the example directory, copy the configuration template, and run the agent after starting any
+of the example Services:
 
 ```sh
 cd examples/odp-agent-discovery
