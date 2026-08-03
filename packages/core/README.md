@@ -3,6 +3,12 @@
 Transport-independent protocol models, validation, resource identity, references, operation URLs,
 Problem Details, and pagination for the Offering Discovery Protocol.
 
+## Install
+
+```sh
+npm install @offering-protocol/core
+```
+
 ```ts
 import {
   OdpValidationError,

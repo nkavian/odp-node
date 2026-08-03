@@ -30,6 +30,15 @@ not a conformance claim. Continuous integration checks out the current `odp-spec
 runs both roles on Node.js 22 and 24, and uploads the Node.js 22 reports as the
 `odp-node-conformance` artifact.
 
+## API and performance
+
+`pnpm typedoc` validates and renders the public barrels for all four packages. Package READMEs are
+the npm-facing integration guides; TypeDoc is the complete symbol reference.
+
+Run `pnpm benchmark` to build and measure the release performance budgets described in
+[PERFORMANCE.md](./PERFORMANCE.md). The complete `pnpm verify` gate checks those budgets after the
+package build.
+
 ## Releases
 
 Published package changes require a Changeset. The release workflow maintains a version pull
