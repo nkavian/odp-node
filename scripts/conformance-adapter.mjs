@@ -19,21 +19,22 @@ import {
   safeParseServiceDocument,
   safeParseSortDefinition
 } from "../packages/core/dist/index.js";
+import { createOdpService } from "../packages/service/dist/index.js";
 
 const input = createInterface({ input: process.stdin, crlfDelay: Infinity });
 
 for await (const line of input) {
   if (line.trim() === "") continue;
   const request = JSON.parse(line);
-  const result = evaluate(request);
+  const result = await evaluate(request);
   process.stdout.write(
     `${JSON.stringify({ protocol_version: "1", sequence: request.sequence, ...result })}\n`
   );
 }
 
-function evaluate(request) {
+async function evaluate(request) {
   try {
-    const actual = evaluateCase(request.vector.subject, request.case, request.role);
+    const actual = await evaluateCase(request.vector.subject, request.case, request.role);
     if (actual === undefined)
       return {
         status: "skipped",
@@ -50,7 +51,7 @@ function evaluate(request) {
   }
 }
 
-function evaluateCase(subject, testCase, role) {
+async function evaluateCase(subject, testCase, role) {
   switch (subject) {
     case "local-identifier":
       return isLocalResourceIdentifier(testCase.value) === testCase.valid;
@@ -87,12 +88,41 @@ function evaluateCase(subject, testCase, role) {
     case "pagination-contract":
       return evaluatePagination(testCase);
     case "errors-limits-contract":
-      return evaluateProblem(testCase);
+      return evaluateErrorsLimits(testCase);
     case "role-baseline":
       return evaluateBaseline(testCase, role);
     default:
       return undefined;
   }
+}
+
+async function evaluateErrorsLimits(testCase) {
+  if (testCase.operation === "validate-problem") return evaluateProblem(testCase);
+  if (testCase.operation !== "validate-limit" || testCase.resource !== "request") return undefined;
+  const odp = createOdpService({
+    document: {
+      name: "Conformance Service",
+      description: "ODP Node conformance adapter",
+      language: "en",
+      localizations: ["en"],
+      http: { endpoint_base: "/odp" }
+    },
+    catalog: {
+      listOfferings: () => ({ odp_version: "1.0", items: [] }),
+      getOffering: () => undefined,
+      searchOfferings: () => ({ odp_version: "1.0", items: [] })
+    }
+  });
+  const request = JSON.stringify({ odp_version: "1.0", query: "gpu" }).padEnd(testCase.bytes, " ");
+  const response = await odp.fetch(
+    new Request("https://service.example/odp/offerings/search", {
+      method: "POST",
+      headers: { "content-type": "application/odp+json" },
+      body: request,
+      duplex: "half"
+    })
+  );
+  return (response.status === 200) === testCase.valid;
 }
 
 function evaluatePagination(testCase) {

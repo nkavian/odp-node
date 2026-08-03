@@ -88,7 +88,7 @@ export class OdpServiceError extends Error {
 
 const MEDIA_TYPE = "application/odp+json";
 const PROBLEM_TYPE = "application/problem+json";
-const MAXIMUM_REQUEST_BYTES = 524_288;
+const MAXIMUM_REQUEST_BYTES = 65_536;
 const OPTIONAL_OPERATIONS = [
   "list-collections",
   "search-collections",
