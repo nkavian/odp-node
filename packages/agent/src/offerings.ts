@@ -1,6 +1,7 @@
 import {
   resolveResourceReference,
   type ActionRequest,
+  type AuthenticationRequirement,
   type OfferingAction,
   type PricePreview,
   type SchemaReference
@@ -15,6 +16,7 @@ export interface OfferingIssue {
 }
 
 export type DiscoveredAction = {
+  authentication: AuthenticationRequirement;
   id: string;
   rel: string;
   description?: string;
@@ -37,6 +39,7 @@ export type DiscoveredHttpAction = Extract<DiscoveredAction, { target: { kind: "
 export type DiscoveredOpenApiAction = Extract<DiscoveredAction, { target: { kind: "openapi" } }>;
 
 export interface OfferingDetails extends Record<string, unknown> {
+  auth_expands?: true;
   odp_version: "1.0";
   id: string;
   name: string;
@@ -82,6 +85,7 @@ export function normalizeActions(
     if (duplicates.has(action.id)) continue;
     try {
       const common = {
+        authentication: action.authentication,
         id: action.id,
         rel: action.rel,
         ...(action.description === undefined ? {} : { description: action.description })

@@ -12,7 +12,10 @@ const document = {
   description: "A reproducible ODP performance fixture.",
   language: "en",
   localizations: ["en"],
-  operations: { supported: ["get-offering", "list-offerings"] },
+  operations: [
+    { authentication: "not-required", name: "get-offering" },
+    { authentication: "not-required", name: "list-offerings" }
+  ],
   http: { endpoint_base: "/odp" }
 };
 

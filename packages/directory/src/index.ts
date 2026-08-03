@@ -1,7 +1,11 @@
 export {};
 import {
   parseServiceDocument,
+  type AuthenticationRequirement,
+  type EnrollmentProtocol,
   type OdpOperation,
+  type OperationDescriptor,
+  type PaymentProtocol,
   type ServiceProtocols
 } from "@offering-protocol/core";
 
@@ -19,10 +23,16 @@ export interface DirectoryClientOptions {
 }
 
 export interface DirectoryServiceFilters {
+  enrollment?: EnrollmentProtocol[];
   keywords?: string[];
-  onboarding?: "aep"[];
-  operations?: OdpOperation[];
-  payments?: ("mpp" | "x402")[];
+  operations?: Array<{
+    authentication?: AuthenticationRequirement;
+    name: OdpOperation;
+  }>;
+  payments?: Array<{
+    authentication?: PaymentProtocol["authentication"];
+    name: PaymentProtocol["name"];
+  }>;
 }
 
 export interface DirectorySearchRequest {
@@ -44,21 +54,21 @@ export interface DirectoryService extends Record<string, unknown> {
   language: string;
   localizations: string[];
   keywords?: string[];
-  operations: OdpOperation[];
+  operations: OperationDescriptor[];
   protocols?: ServiceProtocols;
   indexed_at: string;
 }
 
-export interface DirectoryFacet<Value extends string = string> {
+export interface DirectoryFacet<Value = string> {
   value: Value;
   count: number;
 }
 
 export interface DirectoryFacets {
+  enrollment?: DirectoryFacet<EnrollmentProtocol>[];
   keywords?: DirectoryFacet[];
-  onboarding?: DirectoryFacet<"aep">[];
-  operations?: DirectoryFacet<OdpOperation>[];
-  payments?: DirectoryFacet<"mpp" | "x402">[];
+  operations?: DirectoryFacet<OperationDescriptor>[];
+  payments?: DirectoryFacet<PaymentProtocol>[];
 }
 
 export interface DirectorySearchPage extends Record<string, unknown> {
@@ -82,6 +92,10 @@ export interface DirectoryClient {
   readonly environment: DirectoryEnvironment;
   searchServices(
     request?: DirectorySearchRequest,
+    options?: DirectoryIterationOptions
+  ): DirectorySearchSequence;
+  continueSearchServices(
+    next: string,
     options?: DirectoryIterationOptions
   ): DirectorySearchSequence;
   suggestServices(request: DirectorySuggestionRequest): Promise<string[]>;
@@ -141,6 +155,27 @@ export function createDirectoryClient(options: DirectoryClientOptions = {}): Dir
         }
       };
     },
+    continueSearchServices(next, iteration = {}) {
+      const reference = requireText(next, "next", 1, 2048);
+      const maxPages = boundedInteger(iteration.maxPages ?? MAXIMUM_PAGES, "maxPages", 1, 16);
+      const maxItems = optionalInteger(iteration.maxItems, "maxItems", 1, 10_000);
+      const pages = () => searchPages({}, maxPages, iteration.signal, reference);
+      return {
+        pages: { [Symbol.asyncIterator]: pages },
+        items: {
+          async *[Symbol.asyncIterator]() {
+            let count = 0;
+            for await (const page of pages()) {
+              for (const item of page.items) {
+                if (maxItems !== undefined && count >= maxItems) return;
+                count += 1;
+                yield item;
+              }
+            }
+          }
+        }
+      };
+    },
     async suggestServices(request) {
       const prefix = requireText(request.prefix, "prefix", 1, 128);
       const limit = optionalInteger(request.limit, "limit", 1, 25);
@@ -158,14 +193,21 @@ export function createDirectoryClient(options: DirectoryClientOptions = {}): Dir
   async function* searchPages(
     body: DirectorySearchRequest,
     maxPages: number,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    continuation?: string
   ): AsyncGenerator<DirectorySearchPage> {
-    let url = new URL("/v1/services/search", origin);
-    let init: RequestInit = {
-      method: "POST",
-      body: JSON.stringify(body),
-      ...(signal === undefined ? {} : { signal })
-    };
+    let url =
+      continuation === undefined
+        ? new URL("/v1/services/search", origin)
+        : continuationUrl(continuation, origin);
+    let init: RequestInit =
+      continuation === undefined
+        ? {
+            method: "POST",
+            body: JSON.stringify(body),
+            ...(signal === undefined ? {} : { signal })
+          }
+        : { method: "GET", ...(signal === undefined ? {} : { signal }) };
     for (let pageNumber = 0; pageNumber < maxPages; pageNumber += 1) {
       const page = parseSearchPage(await requestJson(url, init));
       yield page;
@@ -235,17 +277,15 @@ function validateFilters(filters: DirectoryServiceFilters): DirectoryServiceFilt
     ...(filters.keywords === undefined
       ? {}
       : { keywords: uniqueText(filters.keywords, "keywords", 32, 64) }),
-    ...(filters.onboarding === undefined
+    ...(filters.enrollment === undefined
       ? {}
-      : { onboarding: requireEnumArray(filters.onboarding, "onboarding", ["aep"] as const) }),
+      : { enrollment: parseEnrollmentFilters(filters.enrollment) }),
     ...(filters.operations === undefined
       ? {}
       : {
-          operations: requireEnumArray(filters.operations, "operations", OPERATIONS)
+          operations: parseOperationFilters(filters.operations)
         }),
-    ...(filters.payments === undefined
-      ? {}
-      : { payments: requireEnumArray(filters.payments, "payments", ["mpp", "x402"] as const) })
+    ...(filters.payments === undefined ? {} : { payments: parsePaymentFilters(filters.payments) })
   };
 }
 
@@ -277,7 +317,7 @@ function parseService(value: unknown): DirectoryService {
     language: object["language"],
     localizations: object["localizations"],
     ...(object["keywords"] === undefined ? {} : { keywords: object["keywords"] }),
-    operations: { supported: object["operations"] },
+    operations: object["operations"],
     http: { endpoint_base: "/" },
     ...(object["protocols"] === undefined ? {} : { protocols: object["protocols"] })
   });
@@ -290,7 +330,7 @@ function parseService(value: unknown): DirectoryService {
     description: document.description,
     language: document.language,
     localizations: document.localizations,
-    operations: document.operations.supported,
+    operations: document.operations,
     indexed_at: indexedAt,
     ...(document.keywords === undefined ? {} : { keywords: document.keywords }),
     ...(document.protocols === undefined ? {} : { protocols: document.protocols })
@@ -303,18 +343,137 @@ function parseFacets(value: unknown): DirectoryFacets {
     ...(object["keywords"] === undefined
       ? {}
       : { keywords: parseFacet(object["keywords"], "keywords") }),
-    ...(object["onboarding"] === undefined
+    ...(object["enrollment"] === undefined
       ? {}
-      : { onboarding: parseFacet(object["onboarding"], "onboarding", ["aep"] as const) }),
+      : { enrollment: parseDescriptorFacet(object["enrollment"], "enrollment", parseEnrollment) }),
     ...(object["payments"] === undefined
       ? {}
-      : { payments: parseFacet(object["payments"], "payments", ["mpp", "x402"] as const) }),
+      : { payments: parseDescriptorFacet(object["payments"], "payments", parsePayment) }),
     ...(object["operations"] === undefined
       ? {}
       : {
-          operations: parseFacet(object["operations"], "operations", OPERATIONS)
+          operations: parseDescriptorFacet(object["operations"], "operations", parseOperation)
         })
   };
+}
+
+function parseEnrollmentFilters(value: unknown): EnrollmentProtocol[] {
+  return uniqueDescriptors(value, "enrollment", 1, parseEnrollment, ({ name }) => name);
+}
+
+function parseOperationFilters(value: unknown): NonNullable<DirectoryServiceFilters["operations"]> {
+  return uniqueDescriptors(
+    value,
+    "operations",
+    OPERATIONS.length,
+    (entry) => {
+      const object = requireObject(entry, "operation filter");
+      const name = requireEnum(object["name"], "operation name", OPERATIONS);
+      const authentication =
+        object["authentication"] === undefined
+          ? undefined
+          : requireEnum(object["authentication"], "operation authentication", [
+              "not-required",
+              "optional",
+              "required"
+            ] as const);
+      if (Object.keys(object).some((key) => !["authentication", "name"].includes(key)))
+        throw new TypeError("operation filter contains unknown fields");
+      return { name, ...(authentication === undefined ? {} : { authentication }) };
+    },
+    ({ authentication, name }) => `${name}\u0000${authentication ?? ""}`
+  );
+}
+
+function parsePaymentFilters(value: unknown): NonNullable<DirectoryServiceFilters["payments"]> {
+  return uniqueDescriptors(
+    value,
+    "payments",
+    2,
+    (entry) => {
+      const object = requireObject(entry, "payment filter");
+      const name = requireEnum(object["name"], "payment name", ["mpp", "x402"] as const);
+      const authentication =
+        object["authentication"] === undefined
+          ? undefined
+          : requireEnum(object["authentication"], "payment authentication", [
+              "not-required",
+              "required"
+            ] as const);
+      if (Object.keys(object).some((key) => !["authentication", "name"].includes(key)))
+        throw new TypeError("payment filter contains unknown fields");
+      return { name, ...(authentication === undefined ? {} : { authentication }) };
+    },
+    ({ authentication, name }) => `${name}\u0000${authentication ?? ""}`
+  );
+}
+
+function parseEnrollment(value: unknown): EnrollmentProtocol {
+  const object = requireObject(value, "enrollment descriptor");
+  if (Object.keys(object).length !== 1 || object["name"] !== "aep")
+    throw new TypeError("enrollment descriptor is invalid");
+  return { name: "aep" };
+}
+
+function parseOperation(value: unknown): OperationDescriptor {
+  const object = requireObject(value, "operation descriptor");
+  if (Object.keys(object).sort().join(",") !== "authentication,name")
+    throw new TypeError("operation descriptor is invalid");
+  return {
+    authentication: requireEnum(object["authentication"], "operation authentication", [
+      "not-required",
+      "optional",
+      "required"
+    ] as const),
+    name: requireEnum(object["name"], "operation name", OPERATIONS)
+  };
+}
+
+function parsePayment(value: unknown): PaymentProtocol {
+  const object = requireObject(value, "payment descriptor");
+  if (Object.keys(object).sort().join(",") !== "authentication,name")
+    throw new TypeError("payment descriptor is invalid");
+  return {
+    authentication: requireEnum(object["authentication"], "payment authentication", [
+      "not-required",
+      "required"
+    ] as const),
+    name: requireEnum(object["name"], "payment name", ["mpp", "x402"] as const)
+  };
+}
+
+function parseDescriptorFacet<Value>(
+  value: unknown,
+  name: string,
+  parse: (value: unknown) => Value
+): DirectoryFacet<Value>[] {
+  if (!Array.isArray(value) || value.length > 100)
+    throw new TypeError(`${name} facets are invalid`);
+  return value.map((entry) => {
+    const object = requireObject(entry, `${name} facet`);
+    const count = boundedInteger(
+      object["count"],
+      `${name} facet count`,
+      0,
+      Number.MAX_SAFE_INTEGER
+    );
+    return { value: parse(object["value"]), count };
+  });
+}
+
+function uniqueDescriptors<Value>(
+  value: unknown,
+  name: string,
+  maximum: number,
+  parse: (value: unknown) => Value,
+  identity: (value: Value) => string
+): Value[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > maximum)
+    throw new TypeError(`${name} filters are invalid`);
+  const parsed = value.map(parse);
+  if (new Set(parsed.map(identity)).size !== parsed.length)
+    throw new TypeError(`${name} filters must be unique`);
+  return parsed;
 }
 
 function parseFacet<Value extends string>(
@@ -337,6 +496,16 @@ function parseFacet<Value extends string>(
     );
     return { value: facetValue, count };
   });
+}
+
+function requireEnum<Value extends string>(
+  value: unknown,
+  name: string,
+  allowed: readonly Value[]
+): Value {
+  if (typeof value !== "string" || !allowed.includes(value as Value))
+    throw new TypeError(`${name} is invalid`);
+  return value as Value;
 }
 
 function parseSuggestions(value: unknown): string[] {
@@ -403,17 +572,6 @@ function uniqueText(
   const values = value.map((item) => requireText(item, name, 1, maximumLength));
   if (new Set(values).size !== values.length) throw new TypeError(`${name} must be unique`);
   return values;
-}
-
-function requireEnumArray<const Value extends string>(
-  value: unknown,
-  name: string,
-  allowed: readonly Value[]
-): Value[] {
-  const values = uniqueText(value, name, allowed.length, 128);
-  if (values.some((item) => !allowed.includes(item as Value)))
-    throw new TypeError(`${name} is invalid`);
-  return values as Value[];
 }
 
 function optionalInteger(

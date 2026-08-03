@@ -3,7 +3,9 @@ import CachePolicy from "http-cache-semantics";
 import {
   deriveServiceOrigin,
   parseServiceDocument,
-  type OdpOperation,
+  type EnrollmentProtocol,
+  type OperationDescriptor,
+  type PaymentProtocol,
   type ServiceDocument
 } from "@offering-protocol/core";
 
@@ -17,9 +19,9 @@ const DEFAULT_FALLBACK_TTL_MS = 4 * 60 * 60 * 1000;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 export interface OdpServiceCapabilities {
-  operations: OdpOperation[];
-  onboarding: "aep"[];
-  payments: Array<"mpp" | "x402">;
+  enrollment: EnrollmentProtocol[];
+  operations: OperationDescriptor[];
+  payments: PaymentProtocol[];
 }
 
 export interface ServiceInspection {
@@ -408,8 +410,8 @@ function inspectionFrom(
     serviceOrigin,
     freshness,
     capabilities: {
-      operations: [...document.operations.supported],
-      onboarding: [...(document.protocols?.onboarding ?? [])],
+      enrollment: [...(document.protocols?.enrollment ?? [])],
+      operations: [...document.operations],
       payments: [...(document.protocols?.payments ?? [])]
     }
   };

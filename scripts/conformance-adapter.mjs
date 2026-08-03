@@ -156,7 +156,10 @@ function evaluateBaseline(testCase, role) {
       description: "ODP Node conformance adapter",
       language: "en",
       localizations: ["en"],
-      operations: { supported: testCase.operations },
+      operations: testCase.operations.map((name) => ({
+        authentication: "not-required",
+        name
+      })),
       http: { endpoint_base: "/odp" }
     };
     const valid =

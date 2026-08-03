@@ -12,7 +12,11 @@ const serviceDocument = {
   description: "Example catalog",
   language: "en",
   localizations: ["en"],
-  operations: { supported: ["list-offerings", "get-offering", "search-offerings"] },
+  operations: [
+    { authentication: "not-required", name: "list-offerings" },
+    { authentication: "not-required", name: "get-offering" },
+    { authentication: "not-required", name: "search-offerings" }
+  ],
   http: { endpoint_base: "/odp" }
 };
 
@@ -23,7 +27,11 @@ function directoryService(origin: string, name: string) {
     description: `${name} catalog`,
     language: "en",
     localizations: ["en"],
-    operations: ["list-offerings", "get-offering", "search-offerings"],
+    operations: [
+      { authentication: "not-required", name: "list-offerings" },
+      { authentication: "not-required", name: "get-offering" },
+      { authentication: "not-required", name: "search-offerings" }
+    ],
     indexed_at: "2026-08-02T00:00:00Z"
   };
 }

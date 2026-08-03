@@ -20,8 +20,12 @@ function inspection(
     serviceOrigin: "https://example.com",
     freshness: "fetched",
     capabilities: {
-      operations: ["list-offerings", "get-offering", "search-offerings"],
-      onboarding: [],
+      enrollment: [],
+      operations: [
+        { authentication: "not-required", name: "list-offerings" },
+        { authentication: "not-required", name: "get-offering" },
+        { authentication: "not-required", name: "search-offerings" }
+      ],
       payments: []
     },
     document: {
@@ -30,7 +34,11 @@ function inspection(
       description: "Example",
       language: "en",
       localizations: ["en"],
-      operations: { supported: ["list-offerings", "get-offering", "search-offerings"] },
+      operations: [
+        { authentication: "not-required", name: "list-offerings" },
+        { authentication: "not-required", name: "get-offering" },
+        { authentication: "not-required", name: "search-offerings" }
+      ],
       http: { endpoint_base: "/odp" },
       ...(search_capabilities === undefined ? {} : { search_capabilities })
     }

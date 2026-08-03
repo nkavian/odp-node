@@ -10,9 +10,25 @@ export type OdpOperation =
   | "search-offerings"
   | "get-offering";
 
+export type AuthenticationRequirement = "not-required" | "optional" | "required";
+
+export interface OperationDescriptor {
+  authentication: AuthenticationRequirement;
+  name: OdpOperation;
+}
+
+export interface EnrollmentProtocol {
+  name: "aep";
+}
+
+export interface PaymentProtocol {
+  authentication: Exclude<AuthenticationRequirement, "optional">;
+  name: "mpp" | "x402";
+}
+
 export interface ServiceProtocols {
-  onboarding?: ["aep"];
-  payments?: ["mpp"] | ["x402"] | ["mpp", "x402"] | ["x402", "mpp"];
+  enrollment?: [EnrollmentProtocol];
+  payments?: [PaymentProtocol] | [PaymentProtocol, PaymentProtocol];
 }
 
 export type FilterType =
@@ -54,13 +70,14 @@ export interface ServiceDocument extends Record<string, unknown> {
   language: string;
   localizations: string[];
   keywords?: string[];
-  operations: { supported: OdpOperation[] };
+  operations: OperationDescriptor[];
   http: { endpoint_base: string };
   protocols?: ServiceProtocols;
   search_capabilities?: SearchCapabilities;
 }
 
 export interface Collection extends Record<string, unknown> {
+  auth_expands?: true;
   odp_version: OdpVersion;
   id: string;
   name: string;
@@ -73,6 +90,7 @@ export interface Collection extends Record<string, unknown> {
 }
 
 export interface TerseCollection extends Record<string, unknown> {
+  auth_expands?: true;
   id: string;
   name: string;
   odp_version?: OdpVersion;
@@ -115,12 +133,14 @@ export interface OpenApiActionTarget {
 }
 
 export type OfferingAction = {
+  authentication: AuthenticationRequirement;
   id: string;
   rel: string;
   description?: string;
 } & ({ http: HttpActionTarget; openapi?: never } | { openapi: OpenApiActionTarget; http?: never });
 
 export interface Offering extends Record<string, unknown> {
+  auth_expands?: true;
   odp_version: OdpVersion;
   id: string;
   name: string;
@@ -136,6 +156,7 @@ export interface Offering extends Record<string, unknown> {
 }
 
 export interface TerseOffering extends Record<string, unknown> {
+  auth_expands?: true;
   id: string;
   name: string;
   odp_version?: OdpVersion;
@@ -152,6 +173,7 @@ export interface TerseOffering extends Record<string, unknown> {
 }
 
 export interface PageEnvelope<Item = unknown> extends Record<string, unknown> {
+  auth_expands?: true;
   odp_version: OdpVersion;
   items: Item[];
   next?: string;

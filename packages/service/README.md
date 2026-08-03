@@ -77,7 +77,25 @@ The Service Document always advertises the required `list-offerings` and `get-of
 Optional operations are advertised only when their corresponding handlers are configured. There is
 no second capability manifest to keep synchronized.
 
+Every advertised operation defaults to `authentication: "not-required"`. Set
+`operationAuthentication` only for operations that support or require the Service's advertised
+enrollment protocol.
+
+```ts
+const odp = createOdpService({
+  document: {
+    ...serviceDocument,
+    protocols: { enrollment: [{ name: "aep" }] }
+  },
+  catalog,
+  operationAuthentication: {
+    "get-offering": "optional",
+    "search-offerings": "required"
+  }
+});
+```
+
 Catalog handlers may throw `OdpServiceError` to return an intentional ODP Problem Details response.
 Unexpected handler failures produce a generic `500` response without exposing implementation data.
 AEP, MPP, x402, and application authorization wrap `service.fetch`; the package does not infer an
-access mode or invoke payment and onboarding protocols.
+access mode or invoke payment and enrollment protocols.

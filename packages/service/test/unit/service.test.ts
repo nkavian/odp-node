@@ -10,9 +10,16 @@ const offerings = [
     description: "Dedicated accelerator",
     attributes: { memory: 80 },
     schema: { url: "/schemas/gpu.json" },
-    actions: [{ id: "rent", rel: "purchase", http: { href: "/rent", method: "POST" as const } }]
+    actions: [
+      {
+        authentication: "required" as const,
+        id: "rent",
+        rel: "purchase",
+        http: { href: "/rent", method: "POST" as const }
+      }
+    ]
   },
-  { odp_version: "1.0" as const, id: "storage", name: "Storage" }
+  { auth_expands: true as const, odp_version: "1.0" as const, id: "storage", name: "Storage" }
 ];
 
 function service(catalog: OdpCatalog = createStaticCatalog({ offerings })) {
@@ -35,11 +42,65 @@ async function body(response: Response): Promise<Record<string, unknown>> {
 describe("ODP Service", () => {
   it("derives baseline operations and serves the well-known document", async () => {
     const odp = service();
-    expect(odp.document.operations.supported).toEqual(["get-offering", "list-offerings"]);
+    expect(odp.document.operations).toEqual([
+      { authentication: "not-required", name: "get-offering" },
+      { authentication: "not-required", name: "list-offerings" }
+    ]);
     const response = await odp.fetch(new Request("https://example.com/.well-known/odp"));
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/odp+json");
     await expect(response.json()).resolves.toMatchObject({ name: "Example" });
+  });
+
+  it("advertises configured operation authentication", () => {
+    const odp = createOdpService({
+      catalog: createStaticCatalog({ offerings }),
+      document: {
+        name: "Protected Example",
+        description: "Example catalog",
+        language: "en",
+        localizations: ["en"],
+        http: { endpoint_base: "/odp" },
+        protocols: { enrollment: [{ name: "aep" }] }
+      },
+      operationAuthentication: { "get-offering": "required" }
+    });
+    expect(odp.document.operations).toContainEqual({
+      authentication: "required",
+      name: "get-offering"
+    });
+  });
+
+  it("rejects authenticated operations without enrollment", () => {
+    expect(() =>
+      createOdpService({
+        catalog: createStaticCatalog({ offerings }),
+        document: {
+          name: "Invalid Example",
+          description: "Example catalog",
+          language: "en",
+          localizations: ["en"],
+          http: { endpoint_base: "/odp" }
+        },
+        operationAuthentication: { "get-offering": "required" }
+      })
+    ).toThrow("Invalid ODP Service Document");
+  });
+
+  it("rejects authentication configuration for an unadvertised operation", () => {
+    expect(() =>
+      createOdpService({
+        catalog: createStaticCatalog({ offerings }),
+        document: {
+          name: "Invalid Example",
+          description: "Example catalog",
+          language: "en",
+          localizations: ["en"],
+          http: { endpoint_base: "/odp" }
+        },
+        operationAuthentication: { "search-offerings": "required" }
+      })
+    ).toThrow("Authentication configured for unadvertised ODP operation search-offerings");
   });
 
   it("uses terse list and full retrieval defaults", async () => {
@@ -68,6 +129,7 @@ describe("ODP Service", () => {
       await odp.fetch(new Request(`https://example.com${String(first["next"])}`))
     );
     expect((second["items"] as Record<string, unknown>[])[0]?.["id"]).toBe("storage");
+    expect((second["items"] as Record<string, unknown>[])[0]?.["auth_expands"]).toBe(true);
 
     const tampered = String(first["next"]).replace("cursor=", "cursor=x");
     expect(await odp.fetch(new Request(`https://example.com${tampered}`))).toMatchObject({
@@ -92,7 +154,10 @@ describe("ODP Service", () => {
       searchOfferings: search
     };
     const odp = service(catalog);
-    expect(odp.document.operations.supported).toContain("search-offerings");
+    expect(odp.document.operations).toContainEqual({
+      authentication: "not-required",
+      name: "search-offerings"
+    });
     const initial = await odp.fetch(
       new Request("https://example.com/odp/offerings/search", {
         method: "POST",

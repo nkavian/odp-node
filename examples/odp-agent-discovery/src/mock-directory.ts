@@ -28,7 +28,7 @@ export async function createMockDirectory(serviceUrls: string[]): Promise<MockDi
         language: document.language,
         localizations: document.localizations,
         ...(document.keywords === undefined ? {} : { keywords: document.keywords }),
-        operations: [...document.operations.supported],
+        operations: [...document.operations],
         ...(document.protocols === undefined ? {} : { protocols: document.protocols }),
         indexed_at: "2026-08-02T00:00:00Z"
       });

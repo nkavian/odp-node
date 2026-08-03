@@ -24,6 +24,7 @@ const service = createOdpService({
         price: { type: "free" },
         actions: [
           {
+            authentication: "not-required",
             id: "download",
             rel: "download",
             http: {

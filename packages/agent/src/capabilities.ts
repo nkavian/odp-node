@@ -41,7 +41,7 @@ export async function resolveSearchCapabilities(
   const sorts = new Map<string, SortDefinition>();
   const sortScopes = new Map<string, "service" | "collection">();
   const issues: CapabilityIssue[] = [];
-  if (!options.inspection.capabilities.operations.includes("search-offerings")) {
+  if (!options.inspection.capabilities.operations.some(({ name }) => name === "search-offerings")) {
     if (options.collection !== undefined)
       issues.push({
         scope: "collection",

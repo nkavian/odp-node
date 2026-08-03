@@ -123,6 +123,7 @@ function represent<Full, Terse>(
 
 function terseOffering(offering: Offering): TerseOffering {
   return structuredClone({
+    ...(offering.auth_expands === undefined ? {} : { auth_expands: offering.auth_expands }),
     id: offering.id,
     name: offering.name,
     ...(offering.description === undefined ? {} : { description: offering.description }),
@@ -136,6 +137,7 @@ function terseOffering(offering: Offering): TerseOffering {
 
 function terseCollection(collection: Collection): TerseCollection {
   return structuredClone({
+    ...(collection.auth_expands === undefined ? {} : { auth_expands: collection.auth_expands }),
     id: collection.id,
     name: collection.name,
     ...(collection.description === undefined ? {} : { description: collection.description }),
