@@ -201,6 +201,32 @@ describe("ODP Service Collection client", () => {
     expect(headers?.get("accept-language")).toBe("ja");
   });
 
+  it("propagates per-operation cancellation to Service inspection", async () => {
+    const controller = new AbortController();
+    controller.abort(new Error("cancelled"));
+    const transport = vi.fn((_input: string | URL | Request, init?: RequestInit) => {
+      expect(init?.signal).toBe(controller.signal);
+      return Promise.reject(new Error("cancelled"));
+    });
+    await expect(
+      createOdpServiceClient({ serviceUrl: "https://example.com", transport }).getCollection(
+        "compute",
+        { signal: controller.signal }
+      )
+    ).rejects.toMatchObject({ code: "aborted" });
+  });
+
+  it("rejects detail representations whose identifiers do not match their paths", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({ odp_version: "1.0", id: "other", name: "Other" })
+    );
+    await expect(client(transport).getCollection("requested")).rejects.toThrow(
+      "does not match its request path"
+    );
+  });
+
   it("does not call an unadvertised operation", async () => {
     const transport = transportFor(() =>
       response({ ...service, operations: { supported: ["list-offerings", "get-offering"] } })

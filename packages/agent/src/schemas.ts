@@ -15,7 +15,7 @@ const MAXIMUM_DEPTH = 8;
 const MAXIMUM_GRAPH_BYTES = 1_048_576;
 const STANDARD_VOCABULARY = "https://json-schema.org/draft/2020-12/vocab/";
 
-export type JsonSchema = boolean | Record<string, unknown>;
+export type JsonSchema = Record<string, unknown>;
 
 export interface SchemaResolutionOptions {
   url: URL;

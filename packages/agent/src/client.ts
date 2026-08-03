@@ -189,7 +189,17 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
   const initialPageSize = options.initialPageSize ?? 50;
   requireLimit(initialPageSize, "initialPageSize");
   let inspectionFlight: Promise<ServiceInspection> | undefined;
-  const inspect = (): Promise<ServiceInspection> => {
+  const inspect = (signal?: AbortSignal): Promise<ServiceInspection> => {
+    if (signal !== undefined)
+      return inspectService({
+        serviceUrl: options.serviceUrl,
+        fetch: transport,
+        ...(options.acceptLanguage === undefined ? {} : { acceptLanguage: options.acceptLanguage }),
+        cache,
+        fallbackTtlMs: fallbacks.serviceDocumentMs,
+        ...(options.maxRedirects === undefined ? {} : { maxRedirects: options.maxRedirects }),
+        signal: options.signal === undefined ? signal : AbortSignal.any([options.signal, signal])
+      });
     inspectionFlight ??= inspectService({
       serviceUrl: options.serviceUrl,
       fetch: transport,
@@ -332,7 +342,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     id: string,
     request: OfferingGetOptions
   ): Promise<{ offering: Offering; url: URL }> {
-    const inspected = requireOperation(await inspect(), "get-offering");
+    const inspected = requireOperation(await inspect(request.signal), "get-offering");
     const url = buildOdpOperationUrl(
       inspected.document.http.endpoint_base,
       "get-offering",
@@ -353,6 +363,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
         parseOffering
       )
     );
+    requireResourceId(offering.id, id, "Offering");
     return { offering, url };
   }
 
@@ -416,7 +427,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
       );
     },
     async getCollection(id, request = {}) {
-      const inspected = requireOperation(await inspect(), "get-collection");
+      const inspected = requireOperation(await inspect(request.signal), "get-collection");
       const url = buildOdpOperationUrl(
         inspected.document.http.endpoint_base,
         "get-collection",
@@ -435,10 +446,12 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
         fallbacks.collectionMs,
         parseCollection
       );
-      return parseCollection(value);
+      const collection = parseCollection(value);
+      requireResourceId(collection.id, id, "Collection");
+      return collection;
     },
     async getCollectionSearchCapabilities(id, request = {}) {
-      const inspected = await inspect();
+      const inspected = await inspect(request.signal);
       const collection = await this.getCollection(id, {
         representation: "full",
         ...(request.signal === undefined ? {} : { signal: request.signal })
@@ -485,7 +498,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
       };
     },
     async getOfferingSearchCapabilities(collectionId, request = {}) {
-      const inspected = await inspect();
+      const inspected = await inspect(request.signal);
       const collection =
         collectionId === undefined
           ? undefined
@@ -528,7 +541,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
 }
 
 async function* collectionPages<Item>(
-  inspect: () => Promise<ServiceInspection>,
+  inspect: (signal?: AbortSignal) => Promise<ServiceInspection>,
   transport: OdpTransport,
   operation: "list-collections" | "search-collections",
   request: CollectionListOptions | CollectionSearchOptions,
@@ -539,7 +552,7 @@ async function* collectionPages<Item>(
   fallbacks: Required<OdpCacheFallbacks>,
   body?: CollectionSearchRequest
 ): AsyncGenerator<PageEnvelope<Item>> {
-  const inspected = requireOperation(await inspect(), operation);
+  const inspected = requireOperation(await inspect(request.signal), operation);
   const url = buildOdpOperationUrl(
     inspected.document.http.endpoint_base,
     operation,
@@ -588,7 +601,7 @@ async function* collectionPages<Item>(
 }
 
 async function* offeringPages<Item>(
-  inspect: () => Promise<ServiceInspection>,
+  inspect: (signal?: AbortSignal) => Promise<ServiceInspection>,
   transport: OdpTransport,
   operation: "list-offerings" | "list-collection-offerings" | "search-offerings",
   request: OfferingListOptions | OfferingSearchOptions,
@@ -600,7 +613,7 @@ async function* offeringPages<Item>(
   collectionId?: string,
   body?: OfferingSearchRequest
 ): AsyncGenerator<OfferingPage<Item>> {
-  const inspected = requireOperation(await inspect(), operation);
+  const inspected = requireOperation(await inspect(request.signal), operation);
   const url = buildOdpOperationUrl(
     inspected.document.http.endpoint_base,
     operation,
@@ -731,6 +744,11 @@ function requirePageLimit(value: number): void {
 function requireFallback(value: number, name: string): void {
   if (!Number.isFinite(value) || value < 0)
     throw new RangeError(`${name} must be a non-negative finite number`);
+}
+
+function requireResourceId(actual: string, expected: string, type: string): void {
+  if (actual !== expected)
+    throw new TypeError(`${type} identifier does not match its request path`);
 }
 
 function requestInit(method: "GET" | "POST", signal?: AbortSignal): RequestInit {

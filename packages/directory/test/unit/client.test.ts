@@ -125,4 +125,17 @@ describe("Directory client", () => {
         .next()
     ).rejects.toMatchObject({ status: 503 });
   });
+
+  it("stops reading oversized chunked responses", async () => {
+    const transport = vi.fn(() =>
+      Promise.resolve(
+        new Response(new Uint8Array(524_289), {
+          headers: { "content-type": "application/json" }
+        })
+      )
+    );
+    await expect(
+      createDirectoryClient({ transport }).searchServices().pages[Symbol.asyncIterator]().next()
+    ).rejects.toThrow("byte limit");
+  });
 });

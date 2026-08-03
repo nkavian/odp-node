@@ -68,7 +68,8 @@ export async function inspectService(options: InspectServiceOptions): Promise<Se
   const serviceOrigin = deriveServiceOrigin(options.serviceUrl);
   const requestedUrl = new URL(ODP_WELL_KNOWN_PATH, serviceOrigin);
   const cache = options.cache;
-  if (cache === undefined) return fetchInspection(options, requestedUrl, serviceOrigin);
+  if (cache === undefined || options.signal !== undefined)
+    return fetchInspection(options, requestedUrl, serviceOrigin);
 
   const key = `${String(requestedUrl)}\u0000${options.acceptLanguage ?? ""}`;
   const active = flights.get(cache) ?? new Map<string, Promise<ServiceInspection>>();

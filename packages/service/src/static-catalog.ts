@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { Buffer } from "node:buffer";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import {
   parseCollection,
@@ -21,6 +22,7 @@ interface StaticContinuation {
   expiresAt: number;
   limit: number;
   offset: number;
+  target: string;
   representation: string;
 }
 
@@ -29,16 +31,17 @@ export function createStaticCatalog(options: StaticCatalogOptions): OdpCatalog {
   const collections = cloneUnique((options.collections ?? []).map(parseCollection), "Collection");
   const offeringById = new Map(offerings.map((offering) => [offering.id, offering]));
   const collectionById = new Map(collections.map((collection) => [collection.id, collection]));
-  const continuations = new Map<string, StaticContinuation>();
+  validateRelationships(offerings, collections, collectionById);
+  const continuationKey = randomBytes(32);
 
   return {
-    listOfferings: (request) => page(offerings, request, terseOffering, continuations),
+    listOfferings: (request) => page(offerings, request, terseOffering, continuationKey),
     getOffering: (id, request) => represent(offeringById.get(id), request, terseOffering),
     ...(collections.length === 0
       ? {}
       : {
           listCollections: (request: OdpCatalogRequest) =>
-            page(collections, request, terseCollection, continuations),
+            page(collections, request, terseCollection, continuationKey),
           getCollection: (id: string, request: OdpCatalogRequest) =>
             represent(collectionById.get(id), request, terseCollection),
           listCollectionOfferings: (id: string, request: OdpCatalogRequest) => {
@@ -48,7 +51,7 @@ export function createStaticCatalog(options: StaticCatalogOptions): OdpCatalog {
               offerings.filter(({ collection_ids: ids }) => ids?.includes(id) === true),
               request,
               terseOffering,
-              continuations
+              continuationKey
             );
           }
         })
@@ -59,10 +62,10 @@ function page<Full, Terse>(
   values: Full[],
   request: OdpCatalogRequest,
   terse: (value: Full) => Terse,
-  continuations: Map<string, StaticContinuation>
+  continuationKey: Uint8Array
 ): PageEnvelope<Full | Terse> {
   const limit = request.limit ?? 50;
-  const offset = consumeCursor(request, limit, continuations);
+  const offset = consumeCursor(request, limit, continuationKey);
   const items = values
     .slice(offset, offset + limit)
     .map((value) => (request.representation === "full" ? structuredClone(value) : terse(value)));
@@ -77,7 +80,7 @@ function page<Full, Terse>(
             nextOffset,
             request.representation,
             limit,
-            continuations,
+            continuationKey,
             request.request
           )
         })
@@ -88,17 +91,19 @@ function continuation(
   offset: number,
   representation: string,
   limit: number,
-  continuations: Map<string, StaticContinuation>,
+  continuationKey: Uint8Array,
   request: Request
 ): string {
-  pruneContinuations(continuations);
-  const cursor = randomUUID();
-  continuations.set(cursor, {
+  const state: StaticContinuation = {
     expiresAt: Date.now() + 3_600_000,
     limit,
     offset,
+    target: requestTarget(request),
     representation
-  });
+  };
+  const payload = Buffer.from(JSON.stringify(state)).toString("base64url");
+  const signature = createHmac("sha256", continuationKey).update(payload).digest("base64url");
+  const cursor = `${payload}.${signature}`;
   const query = new URLSearchParams({
     cursor,
     representation,
@@ -148,25 +153,86 @@ function cloneUnique<Value extends { id: string }>(values: Value[], name: string
   return copy;
 }
 
+function validateRelationships(
+  offerings: Offering[],
+  collections: Collection[],
+  collectionById: ReadonlyMap<string, Collection>
+): void {
+  for (const offering of offerings)
+    for (const id of offering.collection_ids ?? [])
+      if (!collectionById.has(id))
+        throw new TypeError(`Offering ${offering.id} references unknown Collection ${id}`);
+
+  const depths = new Map<string, number>();
+  const visiting = new Set<string>();
+  const depth = (collection: Collection): number => {
+    const known = depths.get(collection.id);
+    if (known !== undefined) return known;
+    if (visiting.has(collection.id)) throw new TypeError("Collection hierarchy must be acyclic");
+    visiting.add(collection.id);
+    let maximum = 0;
+    for (const id of collection.parent_ids ?? []) {
+      const parent = collectionById.get(id);
+      if (parent === undefined)
+        throw new TypeError(`Collection ${collection.id} references unknown parent ${id}`);
+      maximum = Math.max(maximum, depth(parent) + 1);
+    }
+    visiting.delete(collection.id);
+    if (maximum > 32) throw new TypeError("Collection hierarchy exceeds 32 edges");
+    depths.set(collection.id, maximum);
+    return maximum;
+  };
+  for (const collection of collections) depth(collection);
+}
+
 function consumeCursor(
   request: OdpCatalogRequest,
   limit: number,
-  continuations: Map<string, StaticContinuation>
+  continuationKey: Uint8Array
 ): number {
   const { cursor } = request;
   if (cursor === undefined) return 0;
-  const continuation = continuations.get(cursor);
+  const continuation = decodeContinuation(cursor, continuationKey);
   if (continuation === undefined || continuation.expiresAt < Date.now()) {
-    continuations.delete(cursor);
     throw new OdpServiceError(410, "CONTINUATION_EXPIRED", "Continuation is unavailable");
   }
   if (continuation.limit !== limit || continuation.representation !== request.representation)
     throw new OdpServiceError(400, "INVALID_REQUEST", "Continuation context changed");
+  if (continuation.target !== requestTarget(request.request))
+    throw new OdpServiceError(400, "INVALID_REQUEST", "Continuation context changed");
   return continuation.offset;
 }
 
-function pruneContinuations(continuations: Map<string, StaticContinuation>): void {
-  const now = Date.now();
-  for (const [cursor, continuation] of continuations)
-    if (continuation.expiresAt < now) continuations.delete(cursor);
+function decodeContinuation(
+  cursor: string,
+  continuationKey: Uint8Array
+): StaticContinuation | undefined {
+  const [payload, encodedSignature, extra] = cursor.split(".");
+  if (payload === undefined || encodedSignature === undefined || extra !== undefined)
+    return undefined;
+  const signature = Buffer.from(encodedSignature, "base64url");
+  const expected = createHmac("sha256", continuationKey).update(payload).digest();
+  if (signature.length !== expected.length || !timingSafeEqual(signature, expected))
+    return undefined;
+  try {
+    const value = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as unknown;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+    const state = value as Partial<StaticContinuation>;
+    if (
+      !Number.isSafeInteger(state.expiresAt) ||
+      !Number.isInteger(state.limit) ||
+      !Number.isInteger(state.offset) ||
+      typeof state.target !== "string" ||
+      (state.representation !== "terse" && state.representation !== "full")
+    )
+      return undefined;
+    return state as StaticContinuation;
+  } catch {
+    return undefined;
+  }
+}
+
+function requestTarget(request: Request): string {
+  const url = new URL(request.url);
+  return `${url.origin}${url.pathname}`;
 }
