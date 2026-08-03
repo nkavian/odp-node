@@ -68,7 +68,7 @@ export async function requestOdpValue(
   format: JsonResponseFormat = ODP_FORMAT
 ): Promise<unknown> {
   const identity = cacheIdentity(url, init, acceptLanguage, cachePartition);
-  if (identity === undefined || cache === undefined)
+  if (identity === undefined || cache === undefined || init.signal !== undefined)
     return requestUncoalesced(
       transport,
       url,

@@ -39,8 +39,8 @@ const odp = createOdpService({
 const response = await odp.fetch(request);
 ```
 
-The static catalog validates its configuration immediately and uses opaque, server-managed
-continuation cursors. It is intended for small catalogs, examples, and tests.
+The static catalog validates its configuration immediately and uses opaque, integrity-protected
+stateless continuation cursors. It is intended for small catalogs, examples, and tests.
 
 ## Storage-backed catalogs
 

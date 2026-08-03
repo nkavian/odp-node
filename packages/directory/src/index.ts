@@ -1,6 +1,4 @@
 export {};
-import { Buffer } from "node:buffer";
-
 import {
   parseServiceDocument,
   type OdpOperation,
@@ -357,10 +355,24 @@ async function boundedText(response: Response): Promise<string> {
   const declared = Number(response.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > MAXIMUM_BYTES)
     throw new RangeError("Directory response exceeds its byte limit");
-  const text = await response.text();
-  if (Buffer.byteLength(text, "utf8") > MAXIMUM_BYTES)
-    throw new RangeError("Directory response exceeds its byte limit");
-  return text;
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  if (response.body !== null)
+    for await (const value of response.body as AsyncIterable<unknown>) {
+      if (!(value instanceof Uint8Array))
+        throw new TypeError("Directory response body yielded an invalid chunk");
+      const chunk = value;
+      length += chunk.byteLength;
+      if (length > MAXIMUM_BYTES) throw new RangeError("Directory response exceeds its byte limit");
+      chunks.push(chunk);
+    }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
 }
 
 function requireObject(value: unknown, name: string): Record<string, unknown> {

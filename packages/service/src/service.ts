@@ -1,5 +1,3 @@
-import { Buffer } from "node:buffer";
-
 import {
   parseCollection,
   parseCollectionSearchRequest,
@@ -162,6 +160,7 @@ export function createOdpService(options: OdpServiceOptions): OdpService {
       const offering = await options.catalog.getOffering(offeringId, input);
       if (offering === undefined) throw new RequestProblem(404, "NOT_FOUND", "Offering not found");
       const validated = validateOffering(offering, input.representation);
+      requireResourceId(validated.id, offeringId, "Offering");
       return json(validated, responseLanguage(validated, document.language));
     }
     if (path === "/collections") {
@@ -205,6 +204,7 @@ export function createOdpService(options: OdpServiceOptions): OdpService {
       if (collection === undefined)
         throw new RequestProblem(404, "NOT_FOUND", "Collection not found");
       const validated = validateCollection(collection, input.representation);
+      requireResourceId(validated.id, collectionId, "Collection");
       return json(validated, responseLanguage(validated, document.language));
     }
     throw new RequestProblem(404, "NOT_FOUND", "ODP resource not found");
@@ -256,9 +256,35 @@ async function requestBody(request: Request): Promise<unknown> {
   const declared = Number(request.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > MAXIMUM_REQUEST_BYTES)
     throw new RequestProblem(413, "REQUEST_TOO_LARGE", "ODP request body exceeds its byte limit");
-  const text = await request.text();
-  if (Buffer.byteLength(text, "utf8") > MAXIMUM_REQUEST_BYTES)
-    throw new RequestProblem(413, "REQUEST_TOO_LARGE", "ODP request body exceeds its byte limit");
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  if (request.body !== null)
+    for await (const value of request.body as AsyncIterable<unknown>) {
+      if (!(value instanceof Uint8Array))
+        throw new RequestProblem(400, "INVALID_REQUEST", "ODP request body is invalid");
+      const chunk = value;
+      length += chunk.byteLength;
+      if (length > MAXIMUM_REQUEST_BYTES) {
+        throw new RequestProblem(
+          413,
+          "REQUEST_TOO_LARGE",
+          "ODP request body exceeds its byte limit"
+        );
+      }
+      chunks.push(chunk);
+    }
+  const bytes = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    throw new RequestProblem(400, "INVALID_REQUEST", "ODP request body must use UTF-8");
+  }
   try {
     return JSON.parse(text);
   } catch {
@@ -389,6 +415,11 @@ function parseRequest<Value>(parser: (value: unknown) => Value, value: unknown):
 
 function responseLanguage(value: Record<string, unknown>, fallback: string): string {
   return typeof value["language"] === "string" ? value["language"] : fallback;
+}
+
+function requireResourceId(actual: string, expected: string, type: string): void {
+  if (actual !== expected)
+    throw new TypeError(`${type} identifier does not match its request path`);
 }
 
 function requireBaseline(catalog: OdpCatalog): void {

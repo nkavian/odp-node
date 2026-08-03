@@ -62,12 +62,17 @@ describe("ODP Service", () => {
       await odp.fetch(new Request("https://example.com/odp/offerings?limit=1"))
     );
     expect(first["next"]).toMatch(
-      /^\/odp\/offerings\?cursor=[0-9a-f-]+&representation=terse&limit=1$/u
+      /^\/odp\/offerings\?cursor=[A-Za-z0-9_.-]+&representation=terse&limit=1$/u
     );
     const second = await body(
       await odp.fetch(new Request(`https://example.com${String(first["next"])}`))
     );
     expect((second["items"] as Record<string, unknown>[])[0]?.["id"]).toBe("storage");
+
+    const tampered = String(first["next"]).replace("cursor=", "cursor=x");
+    expect(await odp.fetch(new Request(`https://example.com${tampered}`))).toMatchObject({
+      status: 410
+    });
   });
 
   it("derives optional operations and supports GET search continuations", async () => {
@@ -118,6 +123,58 @@ describe("ODP Service", () => {
     );
     expect(response.status).toBe(400);
     await expect(response.json()).resolves.toMatchObject({ code: "INVALID_REQUEST", status: 400 });
+  });
+
+  it("stops reading oversized chunked request bodies", async () => {
+    const odp = service({
+      listOfferings: () => ({ odp_version: "1.0", items: [] }),
+      getOffering: () => undefined,
+      searchOfferings: () => ({ odp_version: "1.0", items: [] })
+    });
+    const response = await odp.fetch(
+      new Request("https://example.com/odp/offerings/search", {
+        method: "POST",
+        headers: { "content-type": "application/odp+json" },
+        body: new Uint8Array(524_289),
+        duplex: "half"
+      })
+    );
+    expect(response.status).toBe(413);
+  });
+
+  it("rejects invalid static Collection relationships", () => {
+    expect(() =>
+      createStaticCatalog({
+        collections: [
+          { odp_version: "1.0", id: "a", name: "A", parent_ids: ["b"] },
+          { odp_version: "1.0", id: "b", name: "B", parent_ids: ["a"] }
+        ],
+        offerings: []
+      })
+    ).toThrow("acyclic");
+    expect(() =>
+      createStaticCatalog({
+        collections: [],
+        offerings: [
+          {
+            odp_version: "1.0",
+            id: "orphan",
+            name: "Orphan",
+            collection_ids: ["missing"]
+          }
+        ]
+      })
+    ).toThrow("unknown Collection");
+  });
+
+  it("rejects detail representations whose identifiers do not match their paths", async () => {
+    const odp = service({
+      listOfferings: () => ({ odp_version: "1.0", items: [] }),
+      getOffering: () => ({ odp_version: "1.0", id: "other", name: "Other" })
+    });
+    expect(
+      await odp.fetch(new Request("https://example.com/odp/offerings/requested"))
+    ).toMatchObject({ status: 500 });
   });
 
   it("does not materialize marketplace catalogs in the Service runtime", async () => {
