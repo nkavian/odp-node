@@ -1,5 +1,19 @@
 # @offering-protocol/agent
 
+## 0.2.0
+
+### Minor Changes
+
+- [#22](https://github.com/offering-protocol/odp-node/pull/22) [`8cc9c1c`](https://github.com/offering-protocol/odp-node/commit/8cc9c1c2007fc6dc08f30dec745ab4a29ec8d6ba) Thanks [@nkavian](https://github.com/nkavian)! - Implement typed operation, enrollment, payment, and Action authentication descriptors, authenticated-content signals, and access-context cache isolation.
+
+- [#22](https://github.com/offering-protocol/odp-node/pull/22) [`8cc9c1c`](https://github.com/offering-protocol/odp-node/commit/8cc9c1c2007fc6dc08f30dec745ab4a29ec8d6ba) Thanks [@nkavian](https://github.com/nkavian)! - Add validated list and search continuation entry points for short-lived Agent clients.
+
+### Patch Changes
+
+- Updated dependencies [[`8cc9c1c`](https://github.com/offering-protocol/odp-node/commit/8cc9c1c2007fc6dc08f30dec745ab4a29ec8d6ba), [`8cc9c1c`](https://github.com/offering-protocol/odp-node/commit/8cc9c1c2007fc6dc08f30dec745ab4a29ec8d6ba)]:
+  - @offering-protocol/core@0.2.0
+  - @offering-protocol/directory@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
