@@ -1,6 +1,6 @@
 {
   "name": "@offering-protocol/service",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Service-side integration helpers for ODP.",
   "homepage": "https://www.offeringprotocol.org/",
   "type": "module",
