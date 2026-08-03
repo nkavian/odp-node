@@ -125,21 +125,31 @@ describe("ODP Service", () => {
     await expect(response.json()).resolves.toMatchObject({ code: "INVALID_REQUEST", status: 400 });
   });
 
-  it("stops reading oversized chunked request bodies", async () => {
+  it("accepts the request-body boundary and stops reading beyond it", async () => {
     const odp = service({
       listOfferings: () => ({ odp_version: "1.0", items: [] }),
       getOffering: () => undefined,
       searchOfferings: () => ({ odp_version: "1.0", items: [] })
     });
-    const response = await odp.fetch(
+    const body = JSON.stringify({ odp_version: "1.0", query: "gpu" });
+    const boundary = await odp.fetch(
       new Request("https://example.com/odp/offerings/search", {
         method: "POST",
         headers: { "content-type": "application/odp+json" },
-        body: new Uint8Array(524_289),
+        body: body.padEnd(65_536, " "),
         duplex: "half"
       })
     );
-    expect(response.status).toBe(413);
+    expect(boundary.status).toBe(200);
+    const exceeded = await odp.fetch(
+      new Request("https://example.com/odp/offerings/search", {
+        method: "POST",
+        headers: { "content-type": "application/odp+json" },
+        body: body.padEnd(65_537, " "),
+        duplex: "half"
+      })
+    );
+    expect(exceeded.status).toBe(413);
   });
 
   it("rejects invalid static Collection relationships", () => {
