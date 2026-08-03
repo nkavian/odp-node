@@ -99,6 +99,8 @@ export interface OfferingSearchOptions {
 
 export type OfferingGetOptions = CollectionGetOptions;
 
+export type ContinuationOptions = Omit<CollectionListOptions, "limit">;
+
 export interface CollectionSequence<Item> {
   items: AsyncIterable<Item>;
   pages: AsyncIterable<PageEnvelope<Item>>;
@@ -117,6 +119,22 @@ export interface OdpServiceClient {
   ): CollectionSequence<TerseCollection>;
   searchCollections(
     options: CollectionSearchOptions & { representation: "full" }
+  ): CollectionSequence<Collection>;
+  continueListCollections(
+    next: string,
+    options?: ContinuationOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseCollection>;
+  continueListCollections(
+    next: string,
+    options: ContinuationOptions & { representation: "full" }
+  ): CollectionSequence<Collection>;
+  continueSearchCollections(
+    next: string,
+    options?: ContinuationOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseCollection>;
+  continueSearchCollections(
+    next: string,
+    options: ContinuationOptions & { representation: "full" }
   ): CollectionSequence<Collection>;
   getCollection(
     id: string,
@@ -149,6 +167,22 @@ export interface OdpServiceClient {
   ): CollectionSequence<TerseOffering>;
   searchOfferings(
     options: OfferingSearchOptions & { representation: "full" }
+  ): CollectionSequence<Offering>;
+  continueListOfferings(
+    next: string,
+    options?: ContinuationOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseOffering>;
+  continueListOfferings(
+    next: string,
+    options: ContinuationOptions & { representation: "full" }
+  ): CollectionSequence<Offering>;
+  continueSearchOfferings(
+    next: string,
+    options?: ContinuationOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseOffering>;
+  continueSearchOfferings(
+    next: string,
+    options: ContinuationOptions & { representation: "full" }
   ): CollectionSequence<Offering>;
   getOffering(
     id: string,
@@ -217,7 +251,8 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
   const sequence = <Item>(
     operation: "list-collections" | "search-collections",
     request: CollectionListOptions | CollectionSearchOptions,
-    body?: CollectionSearchRequest
+    body?: CollectionSearchRequest,
+    next?: string
   ): CollectionSequence<Item> => {
     const pages = (): AsyncGenerator<PageEnvelope<Item>> =>
       collectionPages<Item>(
@@ -230,7 +265,8 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
         catalogCache,
         cachePartition,
         fallbacks,
-        body
+        body,
+        next
       );
     return {
       pages: { [Symbol.asyncIterator]: pages },
@@ -242,7 +278,8 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     operation: "list-offerings" | "list-collection-offerings" | "search-offerings",
     request: OfferingListOptions | OfferingSearchOptions,
     collectionId?: string,
-    body?: OfferingSearchRequest
+    body?: OfferingSearchRequest,
+    next?: string
   ): CollectionSequence<Item> => {
     const pages = (): AsyncGenerator<OfferingPage<Item>> =>
       offeringPages<Item>(
@@ -256,7 +293,8 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
         cachePartition,
         fallbacks,
         collectionId,
-        body
+        body,
+        next
       );
     return {
       pages: { [Symbol.asyncIterator]: pages },
@@ -319,6 +357,40 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     return request.representation === "full"
       ? offeringSequence<Offering>("search-offerings", request, undefined, body)
       : offeringSequence<TerseOffering>("search-offerings", request, undefined, body);
+  }
+
+  function continueListOfferings(
+    next: string,
+    request?: ContinuationOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseOffering>;
+  function continueListOfferings(
+    next: string,
+    request: ContinuationOptions & { representation: "full" }
+  ): CollectionSequence<Offering>;
+  function continueListOfferings(
+    next: string,
+    request: ContinuationOptions = {}
+  ): CollectionSequence<TerseOffering> | CollectionSequence<Offering> {
+    return request.representation === "full"
+      ? offeringSequence<Offering>("list-offerings", request, undefined, undefined, next)
+      : offeringSequence<TerseOffering>("list-offerings", request, undefined, undefined, next);
+  }
+
+  function continueSearchOfferings(
+    next: string,
+    request?: ContinuationOptions & { representation?: "terse" }
+  ): CollectionSequence<TerseOffering>;
+  function continueSearchOfferings(
+    next: string,
+    request: ContinuationOptions & { representation: "full" }
+  ): CollectionSequence<Offering>;
+  function continueSearchOfferings(
+    next: string,
+    request: ContinuationOptions = {}
+  ): CollectionSequence<TerseOffering> | CollectionSequence<Offering> {
+    return request.representation === "full"
+      ? offeringSequence<Offering>("search-offerings", request, undefined, undefined, next)
+      : offeringSequence<TerseOffering>("search-offerings", request, undefined, undefined, next);
   }
 
   function getOffering(
@@ -426,6 +498,12 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
         })
       );
     },
+    continueListCollections(next, request = {}) {
+      return sequence("list-collections", request, undefined, next);
+    },
+    continueSearchCollections(next, request = {}) {
+      return sequence("search-collections", request, undefined, next);
+    },
     async getCollection(id, request = {}) {
       const inspected = requireOperation(await inspect(request.signal), "get-collection");
       const url = buildOdpOperationUrl(
@@ -461,6 +539,8 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     listOfferings,
     listCollectionOfferings,
     searchOfferings,
+    continueListOfferings,
+    continueSearchOfferings,
     getOffering,
     async resolveAction(offeringId, actionId, request = {}) {
       const { offering, url } = await getOfferingWire(offeringId, {
@@ -550,25 +630,36 @@ async function* collectionPages<Item>(
   cache: OdpCache | undefined,
   cachePartition: string,
   fallbacks: Required<OdpCacheFallbacks>,
-  body?: CollectionSearchRequest
+  body?: CollectionSearchRequest,
+  continuation?: string
 ): AsyncGenerator<PageEnvelope<Item>> {
-  const inspected = requireOperation(await inspect(request.signal), operation);
-  const url = buildOdpOperationUrl(
-    inspected.document.http.endpoint_base,
-    operation,
-    inspected.serviceOrigin
-  );
-  addRepresentation(url, request.representation);
-  const limit = request.limit ?? defaultLimit;
-  requireLimit(limit, "limit");
-  let init: RequestInit =
-    operation === "search-collections"
-      ? { ...requestInit("POST", request.signal), body: JSON.stringify({ ...body, limit }) }
-      : requestInit("GET", request.signal);
-  if (operation === "list-collections") url.searchParams.set("limit", String(limit));
+  const inspection = await inspect(request.signal);
+  const inspected =
+    continuation === undefined ? requireOperation(inspection, operation) : inspection;
+  const url =
+    continuation === undefined
+      ? buildOdpOperationUrl(
+          inspected.document.http.endpoint_base,
+          operation,
+          inspected.serviceOrigin
+        )
+      : resolveContinuation(continuation, inspected.serviceOrigin);
+  let init: RequestInit;
+  if (continuation === undefined) {
+    addRepresentation(url, request.representation);
+    const limit = request.limit ?? defaultLimit;
+    requireLimit(limit, "limit");
+    init =
+      operation === "search-collections"
+        ? { ...requestInit("POST", request.signal), body: JSON.stringify({ ...body, limit }) }
+        : requestInit("GET", request.signal);
+    if (operation === "list-collections") url.searchParams.set("limit", String(limit));
+  } else {
+    init = requestInit("GET", request.signal);
+  }
   const maximum = request.maxPages ?? 16;
   requirePageLimit(maximum);
-  const visited = new Set<string>();
+  const visited = new Set(continuation === undefined ? [] : [continuation]);
   let current = url;
   for (let count = 0; count < maximum; count += 1) {
     const raw = parsePage(
@@ -611,26 +702,37 @@ async function* offeringPages<Item>(
   cachePartition: string,
   fallbacks: Required<OdpCacheFallbacks>,
   collectionId?: string,
-  body?: OfferingSearchRequest
+  body?: OfferingSearchRequest,
+  continuation?: string
 ): AsyncGenerator<OfferingPage<Item>> {
-  const inspected = requireOperation(await inspect(request.signal), operation);
-  const url = buildOdpOperationUrl(
-    inspected.document.http.endpoint_base,
-    operation,
-    inspected.serviceOrigin,
-    collectionId
-  );
-  addRepresentation(url, request.representation);
-  const limit = request.limit ?? defaultLimit;
-  requireLimit(limit, "limit");
-  let init: RequestInit =
-    operation === "search-offerings"
-      ? { ...requestInit("POST", request.signal), body: JSON.stringify({ ...body, limit }) }
-      : requestInit("GET", request.signal);
-  if (operation !== "search-offerings") url.searchParams.set("limit", String(limit));
+  const inspection = await inspect(request.signal);
+  const inspected =
+    continuation === undefined ? requireOperation(inspection, operation) : inspection;
+  const url =
+    continuation === undefined
+      ? buildOdpOperationUrl(
+          inspected.document.http.endpoint_base,
+          operation,
+          inspected.serviceOrigin,
+          collectionId
+        )
+      : resolveContinuation(continuation, inspected.serviceOrigin);
+  let init: RequestInit;
+  if (continuation === undefined) {
+    addRepresentation(url, request.representation);
+    const limit = request.limit ?? defaultLimit;
+    requireLimit(limit, "limit");
+    init =
+      operation === "search-offerings"
+        ? { ...requestInit("POST", request.signal), body: JSON.stringify({ ...body, limit }) }
+        : requestInit("GET", request.signal);
+    if (operation !== "search-offerings") url.searchParams.set("limit", String(limit));
+  } else {
+    init = requestInit("GET", request.signal);
+  }
   const maximum = request.maxPages ?? 16;
   requirePageLimit(maximum);
-  const visited = new Set<string>();
+  const visited = new Set(continuation === undefined ? [] : [continuation]);
   let current = url;
   for (let count = 0; count < maximum; count += 1) {
     const parser = operation === "search-offerings" ? parseOfferingSearchResponse : parsePage;
@@ -647,7 +749,7 @@ async function* offeringPages<Item>(
         parser
       )
     ) as OfferingPage;
-    if (count > 0 && raw.refinements !== undefined)
+    if ((continuation !== undefined || count > 0) && raw.refinements !== undefined)
       throw new TypeError("ODP Offering search continuation cannot contain refinements");
     const page = {
       ...raw,
@@ -696,7 +798,7 @@ function requireOperation(
     | "search-offerings"
     | "get-offering"
 ): ServiceInspection {
-  if (!inspection.capabilities.operations.includes(operation))
+  if (!inspection.capabilities.operations.some(({ name }) => name === operation))
     throw new Error(`ODP Service does not advertise ${operation}`);
   return inspection;
 }

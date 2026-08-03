@@ -28,13 +28,14 @@ const odp = createOdpService({
     language: "en",
     localizations: ["en"],
     name: "x402 Dataset Service",
-    protocols: { payments: ["x402"] }
+    protocols: { payments: [{ authentication: "not-required", name: "x402" }] }
   },
   catalog: createStaticCatalog({
     offerings: [
       {
         actions: [
           {
+            authentication: "not-required",
             http: {
               href: "/actions/dataset",
               method: "GET",

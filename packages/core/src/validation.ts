@@ -79,7 +79,7 @@ function serviceDocumentIssues(value: ServiceDocument): ValidationIssue[] {
   }
   if (
     value.search_capabilities !== undefined &&
-    !value.operations.supported.includes("search-offerings")
+    !value.operations.some(({ name }) => name === "search-offerings")
   ) {
     add("/search_capabilities", "operation-support", "requires the search-offerings operation");
   }

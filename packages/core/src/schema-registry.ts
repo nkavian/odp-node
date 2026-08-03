@@ -3,12 +3,14 @@ import addFormatsModule from "ajv-formats";
 import schema0 from "./schemas/action-relation.schema.json" with { type: "json" };
 import schema1 from "./schemas/action-request.schema.json" with { type: "json" };
 import schema2 from "./schemas/action.schema.json" with { type: "json" };
+import authenticationRequirementSchema from "./schemas/authentication-requirement.schema.json" with { type: "json" };
 import schema3 from "./schemas/attribute-schema-reference.schema.json" with { type: "json" };
 import schema4 from "./schemas/capability-identifier.schema.json" with { type: "json" };
 import schema5 from "./schemas/capability-link.schema.json" with { type: "json" };
 import schema6 from "./schemas/collection-search-request.schema.json" with { type: "json" };
 import schema7 from "./schemas/collection.schema.json" with { type: "json" };
 import schema8 from "./schemas/detail-fields.schema.json" with { type: "json" };
+import enrollmentProtocolSchema from "./schemas/enrollment-protocol.schema.json" with { type: "json" };
 import schema9 from "./schemas/filter-capability-source.schema.json" with { type: "json" };
 import schema10 from "./schemas/filter-definition-page.schema.json" with { type: "json" };
 import schema11 from "./schemas/filter-definition.schema.json" with { type: "json" };
@@ -24,9 +26,11 @@ import schema20 from "./schemas/offering-search-request.schema.json" with { type
 import schema21 from "./schemas/offering-search-response.schema.json" with { type: "json" };
 import schema22 from "./schemas/offering.schema.json" with { type: "json" };
 import schema23 from "./schemas/openapi-action-target.schema.json" with { type: "json" };
+import operationDescriptorSchema from "./schemas/operation-descriptor.schema.json" with { type: "json" };
 import schema24 from "./schemas/page-envelope.schema.json" with { type: "json" };
 import schema25 from "./schemas/page-limit.schema.json" with { type: "json" };
 import schema26 from "./schemas/price-preview.schema.json" with { type: "json" };
+import paymentProtocolSchema from "./schemas/payment-protocol.schema.json" with { type: "json" };
 import schema27 from "./schemas/problem-code.schema.json" with { type: "json" };
 import schema28 from "./schemas/problem-details.schema.json" with { type: "json" };
 import schema29 from "./schemas/protocol-version.schema.json" with { type: "json" };
@@ -58,12 +62,14 @@ const schemas = [
   schema0,
   schema1,
   schema2,
+  authenticationRequirementSchema,
   schema3,
   schema4,
   schema5,
   schema6,
   schema7,
   schema8,
+  enrollmentProtocolSchema,
   schema9,
   schema10,
   schema11,
@@ -79,9 +85,11 @@ const schemas = [
   schema21,
   schema22,
   schema23,
+  operationDescriptorSchema,
   schema24,
   schema25,
   schema26,
+  paymentProtocolSchema,
   schema27,
   schema28,
   schema29,

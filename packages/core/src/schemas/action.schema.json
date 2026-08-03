@@ -4,8 +4,11 @@
   "title": "ODP Offering Action",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "rel"],
+  "required": ["authentication", "id", "rel"],
   "properties": {
+    "authentication": {
+      "$ref": "authentication-requirement.schema.json"
+    },
     "id": {
       "$ref": "local-resource-identifier.schema.json"
     },

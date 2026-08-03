@@ -51,7 +51,7 @@ const service = await inspectService({
 });
 
 service.capabilities.operations;
-service.capabilities.onboarding;
+service.capabilities.enrollment;
 service.capabilities.payments;
 ```
 
@@ -87,7 +87,8 @@ for await (const collection of results.items) {
 Applications can inject a fetch-compatible `transport` that handles live AEP, MPP, or x402
 challenges. The client preserves response headers on `OdpRequestError` for that composition.
 Catalog caching is disabled for a custom transport unless `cachePartition` identifies its stable
-access context; separate principals must use separate partition values.
+access context. Anonymous requests and each authenticated principal must use separate partition
+values. Supporting schemas and OpenAPI documents remain in the anonymous partition.
 
 Initial search responses are cached only when the Service supplies explicit freshness through
 `Cache-Control` or `Expires`. The cache and request coalescer distinguish the complete search body,
@@ -96,6 +97,11 @@ stored; the configurable search fallback does not make it cacheable.
 
 The `items` and `pages` iterables are independent. Iterating both starts two traversals, allowing
 each consumer to stop without advancing or buffering the other.
+
+Short-lived clients can resume a Service-provided `next` reference with `continueListCollections`,
+`continueSearchCollections`, `continueListOfferings`, or `continueSearchOfferings`. Continuations
+are retrieved with GET and remain subject to the same-origin, response, redirect, and traversal
+limits as an uninterrupted sequence.
 
 `getCollectionSearchCapabilities` returns validated Filter Definitions, Sort Definitions with their
 filters resolved, and scoped `issues`. Callers do not need to retrieve linked definition pages,
@@ -142,6 +148,6 @@ if (offering.actions?.some(({ id }) => id === "quote")) {
 ```
 
 Attribute Schema and OpenAPI retrieval uses `supportingTransport`, which defaults to anonymous
-`fetch` rather than the catalog `transport`. This keeps payment and onboarding credentials out of
+`fetch` rather than the catalog `transport`. This keeps payment and enrollment credentials out of
 supporting-document requests. Both transports may share the client's cache; supporting resources
 use an anonymous cache partition.

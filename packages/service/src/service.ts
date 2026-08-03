@@ -8,6 +8,7 @@ import {
   parseServiceDocument,
   type Collection,
   type CollectionSearchRequest,
+  type AuthenticationRequirement,
   type Offering,
   type OfferingPage,
   type OfferingSearchRequest,
@@ -67,6 +68,7 @@ export interface OdpServiceDocumentConfig extends Omit<
 export interface OdpServiceOptions {
   catalog: OdpCatalog;
   document: OdpServiceDocumentConfig;
+  operationAuthentication?: Partial<Record<OdpOperation, AuthenticationRequirement>>;
 }
 
 export interface OdpService {
@@ -99,14 +101,21 @@ const OPTIONAL_OPERATIONS = [
 
 export function createOdpService(options: OdpServiceOptions): OdpService {
   requireBaseline(options.catalog);
-  const operations: OdpOperation[] = ["list-offerings", "get-offering"];
+  const operationNames: OdpOperation[] = ["list-offerings", "get-offering"];
   for (const operation of OPTIONAL_OPERATIONS)
-    if (handlerFor(options.catalog, operation) !== undefined) operations.push(operation);
-  operations.sort();
+    if (handlerFor(options.catalog, operation) !== undefined) operationNames.push(operation);
+  operationNames.sort();
+  for (const name of Object.keys(options.operationAuthentication ?? {}))
+    if (!operationNames.some((operation) => operation === name))
+      throw new TypeError(`Authentication configured for unadvertised ODP operation ${name}`);
+  const operations = operationNames.map((name) => ({
+    authentication: options.operationAuthentication?.[name] ?? "not-required",
+    name
+  }));
   const document = parseServiceDocument({
     ...options.document,
     odp_version: "1.0",
-    operations: { supported: operations }
+    operations
   });
   const endpointBase = normalizeBase(document.http.endpoint_base);
 

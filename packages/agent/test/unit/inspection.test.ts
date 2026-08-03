@@ -8,9 +8,18 @@ const document = {
   description: "An example Service.",
   language: "en",
   localizations: ["en"],
-  operations: { supported: ["list-offerings", "get-offering"] },
+  operations: [
+    { authentication: "not-required", name: "list-offerings" },
+    { authentication: "optional", name: "get-offering" }
+  ],
   http: { endpoint_base: "/odp/" },
-  protocols: { onboarding: ["aep"], payments: ["mpp", "x402"] }
+  protocols: {
+    enrollment: [{ name: "aep" }],
+    payments: [
+      { authentication: "required", name: "mpp" },
+      { authentication: "not-required", name: "x402" }
+    ]
+  }
 };
 
 function odpResponse(body: BodyInit | null = JSON.stringify(document), init: ResponseInit = {}) {
@@ -36,9 +45,15 @@ describe("inspectService", () => {
     expect(result).toMatchObject({
       freshness: "fetched",
       capabilities: {
-        operations: ["list-offerings", "get-offering"],
-        onboarding: ["aep"],
-        payments: ["mpp", "x402"]
+        enrollment: [{ name: "aep" }],
+        operations: [
+          { authentication: "not-required", name: "list-offerings" },
+          { authentication: "optional", name: "get-offering" }
+        ],
+        payments: [
+          { authentication: "required", name: "mpp" },
+          { authentication: "not-required", name: "x402" }
+        ]
       }
     });
   });

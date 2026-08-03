@@ -20,7 +20,8 @@ A fetch-compatible `transport` can be injected for testing without changing the 
 
 Directory search covers cached Service metadata, not Service catalogs. Filter values within one
 category use OR semantics; different categories combine with AND semantics. The initial page can
-include facets for keywords, onboarding protocols, payment protocols, and ODP operations.
+include facets for keywords, enrollment protocols, payment descriptors, and ODP operation
+descriptors.
 
 ```ts
 import { createDirectoryClient } from "@offering-protocol/directory";
@@ -30,7 +31,7 @@ const results = directory.searchServices({
   query: "GPU compute",
   filters: {
     keywords: ["gpu", "accelerator"],
-    payments: ["mpp"]
+    payments: [{ authentication: "not-required", name: "mpp" }]
   },
   limit: 25
 });
@@ -44,6 +45,9 @@ for await (const service of results.items) {
 retrieves opaque continuation links with `GET`. Continuations and redirects must remain on the
 selected canonical origin. `maxPages` defaults to 16, and callers can apply an independent
 `maxItems` bound.
+
+Short-lived clients resume a returned `next` reference with `continueSearchServices`. The client
+validates the canonical origin and retrieves the continuation with GET without interpreting it.
 
 Every result contains the Service origin, cached Service Document metadata, and `indexed_at`, which
 records when that directory entry was refreshed. The agent should inspect the live Service before

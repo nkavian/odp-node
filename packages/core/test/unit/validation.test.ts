@@ -19,7 +19,10 @@ const serviceDocument = {
   description: "An example Service.",
   language: "en",
   localizations: ["en"],
-  operations: { supported: ["list-offerings", "get-offering"] },
+  operations: [
+    { authentication: "not-required", name: "list-offerings" },
+    { authentication: "not-required", name: "get-offering" }
+  ],
   http: { endpoint_base: "/odp/" }
 };
 

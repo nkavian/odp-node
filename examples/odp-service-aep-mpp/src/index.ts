@@ -44,13 +44,17 @@ const odp = createOdpService({
     language: "en",
     localizations: ["en"],
     name: "AEP and MPP Report Service",
-    protocols: { onboarding: ["aep"], payments: ["mpp"] }
+    protocols: {
+      enrollment: [{ name: "aep" }],
+      payments: [{ authentication: "required", name: "mpp" }]
+    }
   },
   catalog: createStaticCatalog({
     offerings: [
       {
         actions: [
           {
+            authentication: "required",
             http: {
               href: "/actions/report",
               method: "GET",

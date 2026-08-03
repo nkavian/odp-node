@@ -9,8 +9,11 @@ const service = {
   language: "en",
   localizations: ["en"],
   keywords: ["gpu"],
-  operations: ["list-offerings", "get-offering"],
-  protocols: { payments: ["mpp"] },
+  operations: [
+    { authentication: "not-required", name: "list-offerings" },
+    { authentication: "not-required", name: "get-offering" }
+  ],
+  protocols: { payments: [{ authentication: "not-required", name: "mpp" }] },
   indexed_at: "2026-08-02T00:00:00Z"
 };
 
@@ -35,27 +38,57 @@ describe("Directory client", () => {
       return Promise.resolve(
         response({
           items: [service],
-          facets: { keywords: [{ value: "gpu", count: 1 }] }
+          facets: {
+            enrollment: [{ value: { name: "aep" }, count: 1 }],
+            keywords: [{ value: "gpu", count: 1 }],
+            operations: [
+              {
+                value: { authentication: "not-required", name: "list-offerings" },
+                count: 1
+              }
+            ],
+            payments: [{ value: { authentication: "not-required", name: "mpp" }, count: 1 }]
+          }
         })
       );
     });
     const search = createDirectoryClient({ transport }).searchServices({
       query: "compute",
-      filters: { keywords: ["gpu", "accelerator"], payments: ["mpp"] },
+      filters: {
+        enrollment: [{ name: "aep" }],
+        keywords: ["gpu", "accelerator"],
+        operations: [{ authentication: "not-required", name: "list-offerings" }],
+        payments: [{ authentication: "not-required", name: "mpp" }]
+      },
       limit: 25
     });
-    let keywordFacet: unknown;
+    let facets: unknown;
     for await (const page of search.pages) {
-      keywordFacet = page.facets?.keywords?.[0];
+      facets = page.facets;
       break;
     }
     expect(requestUrl).toBe("https://directory.offeringprotocol.org/v1/services/search");
     expect(body).toEqual({
       query: "compute",
-      filters: { keywords: ["gpu", "accelerator"], payments: ["mpp"] },
+      filters: {
+        enrollment: [{ name: "aep" }],
+        keywords: ["gpu", "accelerator"],
+        operations: [{ authentication: "not-required", name: "list-offerings" }],
+        payments: [{ authentication: "not-required", name: "mpp" }]
+      },
       limit: 25
     });
-    expect(keywordFacet).toEqual({ value: "gpu", count: 1 });
+    expect(facets).toEqual({
+      enrollment: [{ value: { name: "aep" }, count: 1 }],
+      keywords: [{ value: "gpu", count: 1 }],
+      operations: [
+        {
+          value: { authentication: "not-required", name: "list-offerings" },
+          count: 1
+        }
+      ],
+      payments: [{ value: { authentication: "not-required", name: "mpp" }, count: 1 }]
+    });
   });
 
   it("uses sandbox only when explicitly selected", async () => {
@@ -86,6 +119,22 @@ describe("Directory client", () => {
       origins.push(item.service_origin);
     expect(origins).toEqual(["https://compute.example", "https://storage.example"]);
     expect(methods).toEqual(["POST", "GET"]);
+  });
+
+  it("resumes an opaque continuation in a later client operation", async () => {
+    let method = "";
+    const transport = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      method = init?.method ?? "GET";
+      return Promise.resolve(response({ items: [service] }));
+    });
+    const pages = [];
+    for await (const page of createDirectoryClient({ transport }).continueSearchServices(
+      "/v1/services/search?cursor=opaque",
+      { maxPages: 1 }
+    ).pages)
+      pages.push(page);
+    expect(pages).toEqual([{ items: [service] }]);
+    expect(method).toBe("GET");
   });
 
   it("retrieves bounded suggestions from the selected environment", async () => {

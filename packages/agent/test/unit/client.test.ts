@@ -12,17 +12,15 @@ const service = {
   description: "Example catalog",
   language: "en",
   localizations: ["en"],
-  operations: {
-    supported: [
-      "list-offerings",
-      "get-offering",
-      "list-collection-offerings",
-      "search-offerings",
-      "list-collections",
-      "search-collections",
-      "get-collection"
-    ]
-  },
+  operations: [
+    { authentication: "not-required", name: "list-offerings" },
+    { authentication: "not-required", name: "get-offering" },
+    { authentication: "not-required", name: "list-collection-offerings" },
+    { authentication: "not-required", name: "search-offerings" },
+    { authentication: "not-required", name: "list-collections" },
+    { authentication: "not-required", name: "search-collections" },
+    { authentication: "not-required", name: "get-collection" }
+  ],
   http: { endpoint_base: "/odp" }
 };
 
@@ -74,6 +72,20 @@ describe("ODP Service Collection client", () => {
       parent_id: null,
       limit: 10
     });
+  });
+
+  it("resumes Collection search from a validated Service continuation", async () => {
+    let method: string | undefined;
+    const transport = transportFor((url, init) => {
+      if (url.pathname === "/.well-known/odp") return response(service);
+      method = init.method;
+      return response({ odp_version: "1.0", items: [{ id: "next", name: "Next" }] });
+    });
+    const iterator = client(transport)
+      .continueSearchCollections("/odp/collections/search?cursor=opaque")
+      .pages[Symbol.asyncIterator]();
+    await expect(iterator.next()).resolves.toMatchObject({ value: { items: [{ id: "next" }] } });
+    expect(method).toBe("GET");
   });
 
   it("caches explicitly fresh Collection searches and coalesces identical requests", async () => {
@@ -229,7 +241,13 @@ describe("ODP Service Collection client", () => {
 
   it("does not call an unadvertised operation", async () => {
     const transport = transportFor(() =>
-      response({ ...service, operations: { supported: ["list-offerings", "get-offering"] } })
+      response({
+        ...service,
+        operations: [
+          { authentication: "not-required", name: "list-offerings" },
+          { authentication: "not-required", name: "get-offering" }
+        ]
+      })
     );
     const iterator = createOdpServiceClient({ serviceUrl: "https://example.com", transport })
       .listCollections()
@@ -454,6 +472,26 @@ describe("ODP Service Offering client", () => {
     });
   });
 
+  it("resumes Offering search and rejects cross-origin continuations", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({ odp_version: "1.0", items: [{ id: "next", name: "Next" }] })
+    );
+    const odp = client(transport);
+    const pages = [];
+    for await (const page of odp.continueSearchOfferings("/odp/offerings/search?cursor=opaque")
+      .pages)
+      pages.push(page);
+    expect(pages[0]?.items).toEqual([{ id: "next", name: "Next" }]);
+    await expect(
+      odp
+        .continueListOfferings("https://other.example/odp/offerings?cursor=opaque")
+        .pages[Symbol.asyncIterator]()
+        .next()
+    ).rejects.toThrow("Service origin");
+  });
+
   it("returns validated attributes with their bundled Attribute Schema", async () => {
     const transport = transportFor((url) =>
       url.pathname === "/.well-known/odp"
@@ -539,12 +577,19 @@ describe("ODP Service Offering client", () => {
       url.pathname === "/.well-known/odp"
         ? response(service)
         : response({
+            auth_expands: true,
             odp_version: "1.0",
             id: "gpu",
             name: "GPU",
             actions: [
-              { id: "rent", rel: "purchase", http: { href: "/rentals", method: "POST" } },
               {
+                authentication: "required",
+                id: "rent",
+                rel: "purchase",
+                http: { href: "/rentals", method: "POST" }
+              },
+              {
+                authentication: "optional",
                 id: "quote",
                 rel: "quote",
                 openapi: { url: "/openapi.json", operation_id: "createQuote" }
@@ -560,13 +605,16 @@ describe("ODP Service Offering client", () => {
       transport,
       supportingTransport
     }).getOffering("gpu");
+    expect(offering.auth_expands).toBe(true);
     expect(offering.actions).toEqual([
       {
+        authentication: "required",
         id: "rent",
         rel: "purchase",
         target: { kind: "http", url: "https://example.com/rentals", method: "POST" }
       },
       {
+        authentication: "optional",
         id: "quote",
         rel: "quote",
         target: {
@@ -589,6 +637,7 @@ describe("ODP Service Offering client", () => {
             name: "GPU",
             actions: [
               {
+                authentication: "required",
                 id: "quote",
                 rel: "quote",
                 openapi: { url: "/openapi.json", operation_id: "createQuote" }
