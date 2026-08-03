@@ -8,6 +8,8 @@ import {
   parseProblemResponse,
   parseServiceDocument,
   safeParseOffering,
+  safeParseCollection,
+  safeParseFilterDefinition,
   safeParseServiceDocument
 } from "../../src/index.js";
 
@@ -64,6 +66,51 @@ describe("search capability validation", () => {
         keys: [{ filter_id: "region", direction: "ascending", missing: "last" }]
       }).id
     ).toBe("region-order");
+  });
+
+  it("rejects operators and units that are incompatible with the Filter type", () => {
+    expect(
+      safeParseFilterDefinition({
+        id: "material",
+        title: "Material",
+        description: "Primary material",
+        type: "string",
+        operators: ["gte"]
+      }).success
+    ).toBe(false);
+    expect(
+      safeParseFilterDefinition({
+        id: "available",
+        title: "Available",
+        description: "Current availability",
+        type: "boolean",
+        operators: ["eq"],
+        unit: { system: "ucum", code: "1" }
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe("Collection validation", () => {
+  it("validates localization relationships without case-sensitive duplicates", () => {
+    expect(
+      safeParseCollection({
+        odp_version: "1.0",
+        id: "gpus",
+        name: "GPUs",
+        language: "ja",
+        localizations: ["en"]
+      }).success
+    ).toBe(false);
+    expect(
+      safeParseCollection({
+        odp_version: "1.0",
+        id: "gpus",
+        name: "GPUs",
+        language: "en",
+        localizations: ["en", "EN"]
+      }).success
+    ).toBe(false);
   });
 });
 

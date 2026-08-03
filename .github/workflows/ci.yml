@@ -23,6 +23,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/checkout@v6
+        with:
+          repository: offering-protocol/odp-specs
+          path: .conformance/odp-specs
+
       - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v6
@@ -32,6 +37,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm verify
+
+      - name: Run shared conformance harness
+        run: pnpm conformance --specs-dir .conformance/odp-specs
+
+      - name: Upload conformance reports
+        if: matrix.node == 22
+        uses: actions/upload-artifact@v7
+        with:
+          name: odp-node-conformance
+          path: .conformance/reports/*.json
 
       - name: Check Changesets
         if: github.event_name == 'pull_request' && github.head_ref != 'changeset-release/main' && matrix.node == 22

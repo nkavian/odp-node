@@ -64,6 +64,17 @@ export function deriveServiceOrigin(serviceDocumentUrl: string | URL): string {
 }
 
 export function resolveResourceReference(reference: string, serviceOrigin: string | URL): URL {
+  if (
+    (!reference.startsWith("/") || reference.startsWith("//")) &&
+    !reference.startsWith("https://") &&
+    !reference.startsWith("http://localhost") &&
+    !reference.startsWith("http://127.0.0.1") &&
+    !reference.startsWith("http://[::1]")
+  ) {
+    throw new TypeError(
+      "ODP resource references must be origin-relative absolute paths or secure absolute URLs"
+    );
+  }
   const origin = new URL(serviceOrigin);
   const resolved = new URL(reference, origin);
   if (resolved.hash !== "") throw new TypeError("ODP resource references cannot contain fragments");

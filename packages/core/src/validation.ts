@@ -86,6 +86,60 @@ function serviceDocumentIssues(value: ServiceDocument): ValidationIssue[] {
   return issues;
 }
 
+function localizedRepresentationIssues(value: {
+  language?: string;
+  localizations?: string[];
+}): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const folded = value.localizations?.map((language) => language.toLowerCase());
+  if (folded !== undefined && new Set(folded).size !== folded.length) {
+    issues.push({
+      path: "/localizations",
+      keyword: "unique-language-tag",
+      message: "must be unique without regard to case",
+      params: {}
+    });
+  }
+  if (
+    value.language !== undefined &&
+    folded !== undefined &&
+    !folded.includes(value.language.toLowerCase())
+  ) {
+    issues.push({
+      path: "/localizations",
+      keyword: "contains-language",
+      message: "must contain the representation language",
+      params: {}
+    });
+  }
+  return issues;
+}
+
+function filterDefinitionIssues(value: FilterDefinition): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  const comparisonOperators = new Set(["gt", "gte", "lt", "lte"]);
+  if (
+    (value.type === "string" || value.type === "boolean") &&
+    value.operators.some((operator) => comparisonOperators.has(operator))
+  ) {
+    issues.push({
+      path: "/operators",
+      keyword: "operator-type",
+      message: "contains an operator incompatible with the Filter type",
+      params: {}
+    });
+  }
+  if (value.type === "boolean" && value.unit !== undefined) {
+    issues.push({
+      path: "/unit",
+      keyword: "unit-type",
+      message: "must not appear on a boolean Filter",
+      params: {}
+    });
+  }
+  return issues;
+}
+
 function validator<Value>(
   schemaId: string,
   documentType: string,
@@ -122,11 +176,13 @@ const serviceDocument = validator<ServiceDocument>(
 );
 const collection = validator<Collection>(
   "https://offeringprotocol.org/schemas/collection.schema.json",
-  "Collection"
+  "Collection",
+  localizedRepresentationIssues
 );
 const offering = validator<Offering>(
   "https://offeringprotocol.org/schemas/offering.schema.json",
-  "Offering"
+  "Offering",
+  localizedRepresentationIssues
 );
 const problemDetails = validator<ProblemDetails>(
   "https://offeringprotocol.org/schemas/problem-details.schema.json",
@@ -154,7 +210,8 @@ const offeringSearchResponse = validator<OfferingPage>(
 );
 const filterDefinition = validator<FilterDefinition>(
   "https://offeringprotocol.org/schemas/filter-definition.schema.json",
-  "Filter Definition"
+  "Filter Definition",
+  filterDefinitionIssues
 );
 const sortDefinition = validator<SortDefinition>(
   "https://offeringprotocol.org/schemas/sort-definition.schema.json",
