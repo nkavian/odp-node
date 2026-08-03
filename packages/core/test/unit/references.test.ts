@@ -25,6 +25,12 @@ describe("resource references", () => {
     expect(() =>
       resolveResourceReference("/odp/offerings/123#details", "https://market.example")
     ).toThrow(TypeError);
+    expect(() => resolveResourceReference("offerings/123", "https://market.example")).toThrow(
+      TypeError
+    );
+    expect(() =>
+      resolveResourceReference("//market.example/offerings/123", "https://market.example")
+    ).toThrow(TypeError);
   });
 
   it("requires continuation links to remain on the Service origin", () => {

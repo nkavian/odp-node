@@ -21,6 +21,7 @@
     "format": "prettier --write \"**/*.{ts,js,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,md,yml,yaml}\"",
     "typedoc": "typedoc",
+    "conformance": "node scripts/run-conformance.mjs",
     "smoke:examples": "node scripts/smoke-examples.mjs",
     "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test && pnpm typedoc && pnpm build && pnpm verify:packages && pnpm smoke:examples",
     "verify:packages": "node scripts/verify-packages.mjs",
