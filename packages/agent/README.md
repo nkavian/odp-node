@@ -2,6 +2,12 @@
 
 Agent-oriented composition across directory discovery and per-Service catalog discovery.
 
+## Install
+
+```sh
+npm install @offering-protocol/agent
+```
+
 ## Discover Offerings Across Services
 
 `createOdpAgent` searches the canonical directory and then searches each matching Service. Results

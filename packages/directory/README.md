@@ -2,6 +2,12 @@
 
 The official client for canonical Offering Discovery Protocol Service discovery.
 
+## Install
+
+```sh
+npm install @offering-protocol/directory
+```
+
 The package has two environments and no configurable base URL:
 
 - `createDirectoryClient()` uses `https://directory.offeringprotocol.org`.

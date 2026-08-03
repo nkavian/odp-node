@@ -2,6 +2,12 @@
 
 Framework-neutral Service integration for the Offering Discovery Protocol.
 
+## Install
+
+```sh
+npm install @offering-protocol/service
+```
+
 `createOdpService` owns the well-known document, fixed ODP routes, representation defaults, request
 validation, bounded JSON parsing, media-type negotiation, localization headers, response validation,
 and Problem Details. Its `fetch(Request)` interface works with Node.js and frameworks that accept
