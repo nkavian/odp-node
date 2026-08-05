@@ -71,7 +71,8 @@ export type ResolvedAction = ResolvedHttpAction | ResolvedOpenApiAction;
 
 export function normalizeActions(
   actions: OfferingAction[] | undefined,
-  serviceOrigin: string
+  serviceOrigin: string,
+  serviceOpenApiUrl?: string
 ): { actions?: DiscoveredAction[]; issues: OfferingIssue[] } {
   if (actions === undefined) return { issues: [] };
   const duplicates = duplicateIds(actions);
@@ -104,11 +105,13 @@ export function normalizeActions(
           }
         });
       } else {
+        const openApiUrl = action.openapi.url ?? serviceOpenApiUrl;
+        if (openApiUrl === undefined) throw new Error("OpenAPI Action has no OpenAPI document URL");
         normalized.push({
           ...common,
           target: {
             kind: "openapi",
-            url: String(resolveResourceReference(action.openapi.url, serviceOrigin)),
+            url: String(resolveResourceReference(openApiUrl, serviceOrigin)),
             operation_id: action.openapi.operation_id
           }
         });

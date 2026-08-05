@@ -10,8 +10,8 @@ import {
 } from "@offering-protocol/core";
 
 export const DIRECTORY_ORIGINS = Object.freeze({
-  production: "https://directory.offeringprotocol.org",
-  sandbox: "https://sandbox.offeringprotocol.org"
+  production: "https://api.inflowpay.ai",
+  sandbox: "https://sandbox.inflowpay.ai"
 });
 
 export type DirectoryEnvironment = keyof typeof DIRECTORY_ORIGINS;

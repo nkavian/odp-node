@@ -45,7 +45,7 @@ export async function createMockDirectory(serviceUrls: string[]): Promise<MockDi
     unavailable,
     transport: (input, init) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
-      if (url.origin !== "https://sandbox.offeringprotocol.org")
+      if (url.origin !== "https://sandbox.inflowpay.ai")
         return Promise.resolve(
           new Response("Mock directory received the wrong origin", { status: 500 })
         );

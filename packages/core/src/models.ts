@@ -63,6 +63,27 @@ export interface SearchCapabilities extends Record<string, unknown> {
   sorts?: CapabilitySource<SortDefinition>;
 }
 
+export type ServiceBrandingImageType = "image/png" | "image/svg+xml" | "image/webp";
+
+export interface ServiceBrandingImage {
+  src: string;
+  type: ServiceBrandingImageType;
+}
+
+export interface ServiceBranding {
+  icon: ServiceBrandingImage;
+  logo: ServiceBrandingImage;
+}
+
+export interface ServiceOpenApi {
+  url: string;
+}
+
+export interface ServiceHttp {
+  endpoint_base: string;
+  openapi?: ServiceOpenApi;
+}
+
 export interface ServiceDocument extends Record<string, unknown> {
   odp_version: OdpVersion;
   name: string;
@@ -71,7 +92,8 @@ export interface ServiceDocument extends Record<string, unknown> {
   localizations: string[];
   keywords?: string[];
   operations: OperationDescriptor[];
-  http: { endpoint_base: string };
+  branding?: ServiceBranding;
+  http: ServiceHttp;
   protocols?: ServiceProtocols;
   search_capabilities?: SearchCapabilities;
 }
@@ -128,7 +150,7 @@ export interface HttpActionTarget {
 }
 
 export interface OpenApiActionTarget {
-  url: string;
+  url?: string;
   operation_id: string;
 }
 

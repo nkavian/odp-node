@@ -110,7 +110,7 @@ describe("ODP agent", () => {
     expect(maximumActive).toBe(2);
     expect(events.map((event) => event?.service.name)).toEqual(["Slow", "Fast", "Later"]);
     expect(directoryTransport).toHaveBeenCalledWith(
-      new URL("https://sandbox.offeringprotocol.org/v1/services/search"),
+      new URL("https://sandbox.inflowpay.ai/v1/services/search"),
       expect.objectContaining({ method: "POST" })
     );
   });

@@ -405,15 +405,15 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     id: string,
     request: OfferingGetOptions = {}
   ): Promise<OfferingDetails | TerseOffering> {
-    const { offering, url } = await getOfferingWire(id, request);
+    const { offering, serviceOpenApiUrl, url } = await getOfferingWire(id, request);
     if (request.representation === "terse") return parseOfferingItem(offering, "1.0", false);
-    return enrichOffering(offering, url, request.signal);
+    return enrichOffering(offering, url, serviceOpenApiUrl, request.signal);
   }
 
   async function getOfferingWire(
     id: string,
     request: OfferingGetOptions
-  ): Promise<{ offering: Offering; url: URL }> {
+  ): Promise<{ offering: Offering; serviceOpenApiUrl?: string; url: URL }> {
     const inspected = requireOperation(await inspect(request.signal), "get-offering");
     const url = buildOdpOperationUrl(
       inspected.document.http.endpoint_base,
@@ -436,16 +436,23 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
       )
     );
     requireResourceId(offering.id, id, "Offering");
-    return { offering, url };
+    return {
+      offering,
+      ...(inspected.document.http.openapi?.url === undefined
+        ? {}
+        : { serviceOpenApiUrl: inspected.document.http.openapi.url }),
+      url
+    };
   }
 
   async function enrichOffering(
     offering: Offering,
     offeringUrl: URL,
+    serviceOpenApiUrl?: string,
     signal?: AbortSignal
   ): Promise<OfferingDetails> {
     const { actions: wireActions, attributes, ...envelope } = offering;
-    const normalized = normalizeActions(wireActions, offeringUrl.origin);
+    const normalized = normalizeActions(wireActions, offeringUrl.origin, serviceOpenApiUrl);
     const issues: OfferingIssue[] = [...normalized.issues];
     let safeAttributes = attributes;
     let attributeSchema: Awaited<ReturnType<typeof resolveSchema>> | undefined;
@@ -543,11 +550,11 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     continueSearchOfferings,
     getOffering,
     async resolveAction(offeringId, actionId, request = {}) {
-      const { offering, url } = await getOfferingWire(offeringId, {
+      const { offering, serviceOpenApiUrl, url } = await getOfferingWire(offeringId, {
         representation: "full",
         ...(request.signal === undefined ? {} : { signal: request.signal })
       });
-      const normalized = normalizeActions(offering.actions, url.origin);
+      const normalized = normalizeActions(offering.actions, url.origin, serviceOpenApiUrl);
       const action = normalized.actions?.find(({ id }) => id === actionId);
       if (action === undefined)
         throw new Error(`ODP Offering does not expose usable Action ${actionId}`);

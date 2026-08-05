@@ -67,7 +67,7 @@ describe("Directory client", () => {
       facets = page.facets;
       break;
     }
-    expect(requestUrl).toBe("https://directory.offeringprotocol.org/v1/services/search");
+    expect(requestUrl).toBe("https://api.inflowpay.ai/v1/services/search");
     expect(body).toEqual({
       query: "compute",
       filters: {
@@ -100,7 +100,7 @@ describe("Directory client", () => {
     const client = createDirectoryClient({ environment: "sandbox", transport });
     await client.searchServices().pages[Symbol.asyncIterator]().next();
     expect(client.environment).toBe("sandbox");
-    expect(requestUrl).toBe("https://sandbox.offeringprotocol.org/v1/services/search");
+    expect(requestUrl).toBe("https://sandbox.inflowpay.ai/v1/services/search");
   });
 
   it("follows opaque continuation links with GET", async () => {
@@ -152,7 +152,7 @@ describe("Directory client", () => {
     });
     expect(values).toEqual(["gpu", "gpu compute"]);
     expect(requestUrl).toBe(
-      "https://sandbox.offeringprotocol.org/v1/services/suggestions?prefix=gp&limit=5"
+      "https://sandbox.inflowpay.ai/v1/services/suggestions?prefix=gp&limit=5"
     );
   });
 

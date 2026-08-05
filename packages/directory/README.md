@@ -10,9 +10,9 @@ npm install @offering-protocol/directory
 
 The package has two environments and no configurable base URL:
 
-- `createDirectoryClient()` uses `https://directory.offeringprotocol.org`.
+- `createDirectoryClient()` uses `https://api.inflowpay.ai`.
 - `createDirectoryClient({ environment: "sandbox" })` uses
-  `https://sandbox.offeringprotocol.org`.
+  `https://sandbox.inflowpay.ai`.
 
 A fetch-compatible `transport` can be injected for testing without changing the selected origin.
 
