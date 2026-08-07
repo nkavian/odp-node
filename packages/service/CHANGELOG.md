@@ -1,5 +1,16 @@
 # @offering-protocol/service
 
+## 0.3.0
+
+### Minor Changes
+
+- [#24](https://github.com/offering-protocol/odp-node/pull/24) [`9d32b52`](https://github.com/offering-protocol/odp-node/commit/9d32b52829218ca871ac0603a07d446ac2730b8f) Thanks [@nkavian](https://github.com/nkavian)! - Support service branding and service-wide OpenAPI documents, including OpenAPI Action URL inheritance.
+
+### Patch Changes
+
+- Updated dependencies [[`9d32b52`](https://github.com/offering-protocol/odp-node/commit/9d32b52829218ca871ac0603a07d446ac2730b8f), [`9d32b52`](https://github.com/offering-protocol/odp-node/commit/9d32b52829218ca871ac0603a07d446ac2730b8f)]:
+  - @offering-protocol/core@0.3.0
+
 ## 0.2.0
 
 ### Minor Changes
