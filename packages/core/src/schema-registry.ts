@@ -41,7 +41,10 @@ import schema33 from "./schemas/resource-identity.schema.json" with { type: "jso
 import schema34 from "./schemas/resource-reference.schema.json" with { type: "json" };
 import schema35 from "./schemas/schema-reference.schema.json" with { type: "json" };
 import schema36 from "./schemas/search-capabilities.schema.json" with { type: "json" };
+import serviceBrandingImageSchema from "./schemas/service-branding-image.schema.json" with { type: "json" };
+import serviceBrandingSchema from "./schemas/service-branding.schema.json" with { type: "json" };
 import schema37 from "./schemas/service-document.schema.json" with { type: "json" };
+import serviceOpenApiSchema from "./schemas/service-openapi.schema.json" with { type: "json" };
 import schema38 from "./schemas/service-origin.schema.json" with { type: "json" };
 import schema39 from "./schemas/service-protocols.schema.json" with { type: "json" };
 import schema40 from "./schemas/sort-capability-source.schema.json" with { type: "json" };
@@ -100,7 +103,10 @@ const schemas = [
   schema34,
   schema35,
   schema36,
+  serviceBrandingImageSchema,
+  serviceBrandingSchema,
   schema37,
+  serviceOpenApiSchema,
   schema38,
   schema39,
   schema40,

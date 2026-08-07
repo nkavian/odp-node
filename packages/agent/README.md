@@ -136,7 +136,8 @@ enrichment.
 Action targets are normalized to absolute URLs during full Offering retrieval. Their supporting
 documents remain lazy: `resolveAction(offeringId, actionId)` resolves a compact request schema or
 validates an OpenAPI 3.1 document and selects its unique `operation_id`. It never invokes the
-Action.
+Action. An OpenAPI Action may omit its `url` when the Service Document declares
+`http.openapi.url`; an Action URL overrides that Service-wide default.
 
 ```ts
 const offering = await odp.getOffering("gpu-h100");

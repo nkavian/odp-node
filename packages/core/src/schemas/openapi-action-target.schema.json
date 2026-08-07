@@ -4,7 +4,7 @@
   "title": "ODP OpenAPI Action target",
   "type": "object",
   "additionalProperties": false,
-  "required": ["url", "operation_id"],
+  "required": ["operation_id"],
   "properties": {
     "url": {
       "$ref": "resource-reference.schema.json"

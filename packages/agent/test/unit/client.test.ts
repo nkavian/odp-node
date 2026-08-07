@@ -573,9 +573,13 @@ describe("ODP Service Offering client", () => {
   });
 
   it("normalizes Actions without eagerly retrieving their supporting documents", async () => {
+    const document = {
+      ...service,
+      http: { ...service.http, openapi: { url: "/openapi.json" } }
+    };
     const transport = transportFor((url) =>
       url.pathname === "/.well-known/odp"
-        ? response(service)
+        ? response(document)
         : response({
             auth_expands: true,
             odp_version: "1.0",
@@ -592,7 +596,7 @@ describe("ODP Service Offering client", () => {
                 authentication: "optional",
                 id: "quote",
                 rel: "quote",
-                openapi: { url: "/openapi.json", operation_id: "createQuote" }
+                openapi: { operation_id: "createQuote" }
               }
             ]
           })
@@ -625,6 +629,39 @@ describe("ODP Service Offering client", () => {
       }
     ]);
     expect(supportingTransport).not.toHaveBeenCalled();
+  });
+
+  it("reports an OpenAPI Action that has no document URL", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({
+            odp_version: "1.0",
+            id: "gpu",
+            name: "GPU",
+            actions: [
+              {
+                authentication: "not-required",
+                id: "quote",
+                rel: "quote",
+                openapi: { operation_id: "createQuote" }
+              }
+            ]
+          })
+    );
+    const offering = await createOdpServiceClient({
+      serviceUrl: "https://example.com",
+      transport
+    }).getOffering("gpu");
+
+    expect(offering).not.toHaveProperty("actions");
+    expect(offering.issues).toEqual([
+      {
+        scope: "action",
+        action_id: "quote",
+        message: "OpenAPI Action has no OpenAPI document URL"
+      }
+    ]);
   });
 
   it("lazily resolves an OpenAPI Action to exactly one operation", async () => {

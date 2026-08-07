@@ -48,6 +48,31 @@ describe("Service Document validation", () => {
       issues: [{ keyword: "contains-default-language", path: "/localizations" }]
     });
   });
+
+  it("parses optional branding and a service-wide OpenAPI document", () => {
+    const document = {
+      ...serviceDocument,
+      branding: {
+        icon: { src: "/branding/icon.svg", type: "image/svg+xml" },
+        logo: { src: "/branding/logo.webp", type: "image/webp" }
+      },
+      http: {
+        endpoint_base: "/odp/",
+        openapi: { url: "/openapi.json" }
+      }
+    };
+
+    expect(parseServiceDocument(document)).toEqual(document);
+  });
+
+  it("requires complete branding metadata", () => {
+    expect(
+      safeParseServiceDocument({
+        ...serviceDocument,
+        branding: { icon: { src: "/branding/icon.png", type: "image/png" } }
+      }).success
+    ).toBe(false);
+  });
 });
 
 describe("search capability validation", () => {
@@ -115,6 +140,18 @@ describe("Collection validation", () => {
       }).success
     ).toBe(false);
   });
+
+  it("rejects malformed language tags", () => {
+    expect(
+      safeParseCollection({
+        odp_version: "1.0",
+        id: "gpus",
+        name: "GPUs",
+        language: "en-a",
+        localizations: ["en-a"]
+      }).success
+    ).toBe(false);
+  });
 });
 
 describe("Offering validation", () => {
@@ -131,6 +168,18 @@ describe("Offering validation", () => {
       attributes: { model: "A100" }
     });
     expect(result.success).toBe(false);
+  });
+
+  it("rejects repeated language variants", () => {
+    expect(
+      safeParseOffering({
+        odp_version: "1.0",
+        id: "gpu",
+        name: "GPU rental",
+        language: "sl-rozaj-rozaj",
+        localizations: ["sl-rozaj-rozaj"]
+      }).success
+    ).toBe(false);
   });
 
   it("throws a structured validation error", () => {
