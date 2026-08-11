@@ -9,23 +9,25 @@ const children = [];
 
 try {
   const smallPort = await unusedPort();
-  const marketplacePort = await unusedPort();
   const smallUrl = `http://127.0.0.1:${smallPort}`;
-  const marketplaceUrl = `http://127.0.0.1:${marketplacePort}`;
   const small = start("small Service", "examples/odp-service-small/dist/index.js", smallPort);
+  await waitFor(`${smallUrl}/.well-known/odp`, small);
+
+  const marketplacePort = await unusedPort();
+  const marketplaceUrl = `http://127.0.0.1:${marketplacePort}`;
   const marketplace = start(
     "marketplace Service",
     "examples/odp-service-marketplace/dist/index.js",
     marketplacePort
   );
-  await Promise.all([
-    waitFor(`${smallUrl}/.well-known/odp`, small),
-    waitFor(`${marketplaceUrl}/.well-known/odp`, marketplace)
-  ]);
+  await waitFor(`${marketplaceUrl}/.well-known/odp`, marketplace);
   await smokeMarketplaceSearch(marketplaceUrl);
   const download = await fetch(`${smallUrl}/downloads/incident-plan.txt`);
-  if (!download.ok || !(await download.text()).includes("Incident Response Plan"))
-    throw new Error("Small Service download Action failed");
+  const downloadBody = await download.text();
+  if (!download.ok || !downloadBody.includes("Incident Response Plan"))
+    throw new Error(
+      `Small Service download Action failed with HTTP ${download.status}: ${JSON.stringify(downloadBody)}`
+    );
   const result = await run("examples/odp-agent-discovery/dist/index.js", {
     SERVICE_URLS: `${smallUrl},http://127.0.0.1:1,${marketplaceUrl}`
   });
