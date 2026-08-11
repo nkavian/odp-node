@@ -46,7 +46,7 @@ const odp = createOdpService({
     name: "AEP and MPP Report Service",
     protocols: {
       enrollment: [{ name: "aep" }],
-      payments: [{ authentication: "required", name: "mpp" }]
+      payments: [{ authentication: "required", name: "mpp", options: ["inflow"] }]
     }
   },
   catalog: createStaticCatalog({

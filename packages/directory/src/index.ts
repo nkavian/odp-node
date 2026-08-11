@@ -1,11 +1,13 @@
 export {};
 import {
+  PAYMENT_OPTIONS,
   parseServiceDocument,
   type AuthenticationRequirement,
   type EnrollmentProtocol,
   type OdpOperation,
   type OperationDescriptor,
   type PaymentProtocol,
+  type PaymentOption,
   type ServiceProtocols
 } from "@offering-protocol/core";
 
@@ -32,6 +34,7 @@ export interface DirectoryServiceFilters {
   payments?: Array<{
     authentication?: PaymentProtocol["authentication"];
     name: PaymentProtocol["name"];
+    options?: PaymentOption[];
   }>;
 }
 
@@ -64,11 +67,17 @@ export interface DirectoryFacet<Value = string> {
   count: number;
 }
 
+export interface DirectoryPaymentOptionFacetValue {
+  name: PaymentProtocol["name"];
+  option: PaymentOption;
+}
+
 export interface DirectoryFacets {
   enrollment?: DirectoryFacet<EnrollmentProtocol>[];
   keywords?: DirectoryFacet[];
   operations?: DirectoryFacet<OperationDescriptor>[];
   payments?: DirectoryFacet<PaymentProtocol>[];
+  payment_options?: DirectoryFacet<DirectoryPaymentOptionFacetValue>[];
 }
 
 export interface DirectorySearchPage extends Record<string, unknown> {
@@ -349,6 +358,15 @@ function parseFacets(value: unknown): DirectoryFacets {
     ...(object["payments"] === undefined
       ? {}
       : { payments: parseDescriptorFacet(object["payments"], "payments", parsePayment) }),
+    ...(object["payment_options"] === undefined
+      ? {}
+      : {
+          payment_options: parseDescriptorFacet(
+            object["payment_options"],
+            "payment_options",
+            parsePaymentOptionFacet
+          )
+        }),
     ...(object["operations"] === undefined
       ? {}
       : {
@@ -400,11 +418,20 @@ function parsePaymentFilters(value: unknown): NonNullable<DirectoryServiceFilter
               "not-required",
               "required"
             ] as const);
-      if (Object.keys(object).some((key) => !["authentication", "name"].includes(key)))
+      const options =
+        object["options"] === undefined
+          ? undefined
+          : uniqueEnums(object["options"], "payment options", PAYMENT_OPTIONS);
+      if (Object.keys(object).some((key) => !["authentication", "name", "options"].includes(key)))
         throw new TypeError("payment filter contains unknown fields");
-      return { name, ...(authentication === undefined ? {} : { authentication }) };
+      return {
+        name,
+        ...(authentication === undefined ? {} : { authentication }),
+        ...(options === undefined ? {} : { options })
+      };
     },
-    ({ authentication, name }) => `${name}\u0000${authentication ?? ""}`
+    ({ authentication, name, options }) =>
+      `${name}\u0000${authentication ?? ""}\u0000${options?.join("\u0000") ?? ""}`
   );
 }
 
@@ -431,14 +458,32 @@ function parseOperation(value: unknown): OperationDescriptor {
 
 function parsePayment(value: unknown): PaymentProtocol {
   const object = requireObject(value, "payment descriptor");
-  if (Object.keys(object).sort().join(",") !== "authentication,name")
+  if (Object.keys(object).some((key) => !["authentication", "name", "options"].includes(key)))
     throw new TypeError("payment descriptor is invalid");
+  const options =
+    object["options"] === undefined
+      ? undefined
+      : uniqueEnums(object["options"], "payment options", PAYMENT_OPTIONS);
   return {
     authentication: requireEnum(object["authentication"], "payment authentication", [
       "not-required",
       "required"
     ] as const),
-    name: requireEnum(object["name"], "payment name", ["mpp", "x402"] as const)
+    name: requireEnum(object["name"], "payment name", ["mpp", "x402"] as const),
+    ...(options === undefined ? {} : { options })
+  };
+}
+
+function parsePaymentOptionFacet(value: unknown): {
+  name: PaymentProtocol["name"];
+  option: PaymentOption;
+} {
+  const object = requireObject(value, "payment option facet");
+  if (Object.keys(object).sort().join(",") !== "name,option")
+    throw new TypeError("payment option facet is invalid");
+  return {
+    name: requireEnum(object["name"], "payment option protocol", ["mpp", "x402"] as const),
+    option: requireEnum(object["option"], "payment option", PAYMENT_OPTIONS)
   };
 }
 
@@ -506,6 +551,18 @@ function requireEnum<Value extends string>(
   if (typeof value !== "string" || !allowed.includes(value as Value))
     throw new TypeError(`${name} is invalid`);
   return value as Value;
+}
+
+function uniqueEnums<Value extends string>(
+  value: unknown,
+  name: string,
+  allowed: readonly Value[]
+): Value[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > allowed.length)
+    throw new TypeError(`${name} are invalid`);
+  const values = value.map((item) => requireEnum(item, name, allowed));
+  if (new Set(values).size !== values.length) throw new TypeError(`${name} must be unique`);
+  return values;
 }
 
 function parseSuggestions(value: unknown): string[] {

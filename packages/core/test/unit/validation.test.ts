@@ -73,6 +73,39 @@ describe("Service Document validation", () => {
       }).success
     ).toBe(false);
   });
+
+  it("validates advertised payment options", () => {
+    const document = {
+      ...serviceDocument,
+      protocols: {
+        payments: [
+          {
+            authentication: "not-required",
+            name: "mpp",
+            options: ["card", "inflow", "solana"]
+          }
+        ]
+      }
+    };
+
+    expect(parseServiceDocument(document)).toEqual(document);
+    expect(
+      safeParseServiceDocument({
+        ...document,
+        protocols: {
+          payments: [{ ...document.protocols.payments[0], options: ["future-option"] }]
+        }
+      }).success
+    ).toBe(false);
+    expect(
+      safeParseServiceDocument({
+        ...document,
+        protocols: {
+          payments: [{ ...document.protocols.payments[0], options: ["solana", "solana"] }]
+        }
+      }).success
+    ).toBe(false);
+  });
 });
 
 describe("search capability validation", () => {

@@ -37,3 +37,8 @@ allowed by the protocol.
 
 Pagination exposes both page and item asynchronous iterables. Continuation values remain opaque and
 are passed unchanged to the caller-supplied page loader.
+
+Service payment descriptors may advertise a bounded `options` list such as `inflow`, `solana`, or
+`base`. `PAYMENT_OPTIONS` supplies the closed runtime vocabulary and `PaymentOption` supplies its
+TypeScript type. These labels summarize compatibility; live MPP and x402 responses provide the
+authoritative payment terms.

@@ -3,7 +3,8 @@
 This Service publishes a public ODP catalog containing a report Offering. The Offering's `purchase`
 Action points to `GET /actions/report`, which requires AEP API-key authentication before presenting
 an MPP payment challenge for 0.01 USDC. ODP advertises both protocols, but the live HTTP challenges
-control authentication and payment.
+control authentication and payment. The MPP descriptor advertises InFlow as an accepted payment
+option.
 
 ## Run
 

@@ -28,7 +28,9 @@ const odp = createOdpService({
     language: "en",
     localizations: ["en"],
     name: "x402 Dataset Service",
-    protocols: { payments: [{ authentication: "not-required", name: "x402" }] }
+    protocols: {
+      payments: [{ authentication: "not-required", name: "x402", options: ["inflow"] }]
+    }
   },
   catalog: createStaticCatalog({
     offerings: [
