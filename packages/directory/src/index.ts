@@ -510,7 +510,9 @@ function requireEnum<Value extends string>(
 
 function parseSuggestions(value: unknown): string[] {
   const object = requireObject(value, "Directory suggestions");
-  return uniqueText(object["items"], "suggestions", 25, 128);
+  const items = object["items"];
+  if (Array.isArray(items) && items.length === 0) return [];
+  return uniqueText(items, "suggestions", 25, 128);
 }
 
 function continuationUrl(reference: string, origin: string): URL {

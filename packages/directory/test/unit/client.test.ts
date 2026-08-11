@@ -156,6 +156,14 @@ describe("Directory client", () => {
     );
   });
 
+  it("accepts an empty suggestion result", async () => {
+    const transport = vi.fn(() => Promise.resolve(response({ items: [] })));
+
+    await expect(
+      createDirectoryClient({ transport }).suggestServices({ prefix: "unmatched" })
+    ).resolves.toEqual([]);
+  });
+
   it("rejects cross-origin continuations and preserves HTTP failure details", async () => {
     const crossOrigin = vi.fn(() =>
       Promise.resolve(response({ items: [], next: "https://other.example/search" }))
