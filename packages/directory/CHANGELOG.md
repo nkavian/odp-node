@@ -1,5 +1,14 @@
 # @offering-protocol/directory
 
+## 0.2.3
+
+### Patch Changes
+
+- [#28](https://github.com/offering-protocol/odp-node/pull/28) [`2a04125`](https://github.com/offering-protocol/odp-node/commit/2a041253458b7b9762b5d13856b4952c75ce7fc5) Thanks [@nkavian](https://github.com/nkavian)! - Add bounded payment-option advertisements, directory filters, and protocol-option facets.
+
+- Updated dependencies [[`2a04125`](https://github.com/offering-protocol/odp-node/commit/2a041253458b7b9762b5d13856b4952c75ce7fc5)]:
+  - @offering-protocol/core@0.3.1
+
 ## 0.2.2
 
 ### Patch Changes
