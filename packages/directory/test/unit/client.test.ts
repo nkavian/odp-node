@@ -13,7 +13,9 @@ const service = {
     { authentication: "not-required", name: "list-offerings" },
     { authentication: "not-required", name: "get-offering" }
   ],
-  protocols: { payments: [{ authentication: "not-required", name: "mpp" }] },
+  protocols: {
+    payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }]
+  },
   indexed_at: "2026-08-02T00:00:00Z"
 };
 
@@ -47,7 +49,20 @@ describe("Directory client", () => {
                 count: 1
               }
             ],
-            payments: [{ value: { authentication: "not-required", name: "mpp" }, count: 1 }]
+            payments: [
+              {
+                value: {
+                  authentication: "not-required",
+                  name: "mpp",
+                  options: ["inflow", "solana"]
+                },
+                count: 1
+              }
+            ],
+            payment_options: [
+              { value: { name: "mpp", option: "inflow" }, count: 1 },
+              { value: { name: "mpp", option: "solana" }, count: 1 }
+            ]
           }
         })
       );
@@ -58,7 +73,7 @@ describe("Directory client", () => {
         enrollment: [{ name: "aep" }],
         keywords: ["gpu", "accelerator"],
         operations: [{ authentication: "not-required", name: "list-offerings" }],
-        payments: [{ authentication: "not-required", name: "mpp" }]
+        payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }]
       },
       limit: 25
     });
@@ -74,7 +89,7 @@ describe("Directory client", () => {
         enrollment: [{ name: "aep" }],
         keywords: ["gpu", "accelerator"],
         operations: [{ authentication: "not-required", name: "list-offerings" }],
-        payments: [{ authentication: "not-required", name: "mpp" }]
+        payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }]
       },
       limit: 25
     });
@@ -87,7 +102,20 @@ describe("Directory client", () => {
           count: 1
         }
       ],
-      payments: [{ value: { authentication: "not-required", name: "mpp" }, count: 1 }]
+      payments: [
+        {
+          value: {
+            authentication: "not-required",
+            name: "mpp",
+            options: ["inflow", "solana"]
+          },
+          count: 1
+        }
+      ],
+      payment_options: [
+        { value: { name: "mpp", option: "inflow" }, count: 1 },
+        { value: { name: "mpp", option: "solana" }, count: 1 }
+      ]
     });
   });
 

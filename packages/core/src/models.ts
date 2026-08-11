@@ -21,9 +21,31 @@ export interface EnrollmentProtocol {
   name: "aep";
 }
 
+export const PAYMENT_OPTIONS = Object.freeze([
+  "algorand",
+  "aptos",
+  "arbitrum",
+  "avalanche",
+  "base",
+  "card",
+  "ethereum",
+  "hedera",
+  "inflow",
+  "lightning",
+  "polygon",
+  "solana",
+  "stellar",
+  "stripe",
+  "tempo",
+  "ton"
+] as const);
+
+export type PaymentOption = (typeof PAYMENT_OPTIONS)[number];
+
 export interface PaymentProtocol {
   authentication: Exclude<AuthenticationRequirement, "optional">;
   name: "mpp" | "x402";
+  options?: PaymentOption[];
 }
 
 export interface ServiceProtocols {

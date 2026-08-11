@@ -30,6 +30,7 @@ import operationDescriptorSchema from "./schemas/operation-descriptor.schema.jso
 import schema24 from "./schemas/page-envelope.schema.json" with { type: "json" };
 import schema25 from "./schemas/page-limit.schema.json" with { type: "json" };
 import schema26 from "./schemas/price-preview.schema.json" with { type: "json" };
+import paymentOptionSchema from "./schemas/payment-option.schema.json" with { type: "json" };
 import paymentProtocolSchema from "./schemas/payment-protocol.schema.json" with { type: "json" };
 import schema27 from "./schemas/problem-code.schema.json" with { type: "json" };
 import schema28 from "./schemas/problem-details.schema.json" with { type: "json" };
@@ -92,6 +93,7 @@ const schemas = [
   schema24,
   schema25,
   schema26,
+  paymentOptionSchema,
   paymentProtocolSchema,
   schema27,
   schema28,

@@ -3,7 +3,8 @@
 This Service publishes a public ODP catalog containing a dataset Offering. The Offering's
 `download` Action points to `GET /actions/dataset`, protected by the foundation x402 Express
 middleware using InFlow as facilitator. ODP provides the preview and target; the live x402 response
-provides the authoritative payment requirements.
+provides the authoritative payment requirements. The x402 descriptor advertises InFlow as an
+accepted payment option.
 
 ## Run
 
