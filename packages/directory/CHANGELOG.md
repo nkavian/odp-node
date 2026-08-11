@@ -1,5 +1,11 @@
 # @offering-protocol/directory
 
+## 0.2.2
+
+### Patch Changes
+
+- [#26](https://github.com/offering-protocol/odp-node/pull/26) [`4fefd79`](https://github.com/offering-protocol/odp-node/commit/4fefd79839af6f69070633d6c78c96ea1d9583c1) Thanks [@nkavian](https://github.com/nkavian)! - Accept an empty directory suggestion result when no indexed keywords match the requested prefix.
+
 ## 0.2.1
 
 ### Patch Changes
