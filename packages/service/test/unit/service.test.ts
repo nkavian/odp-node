@@ -28,9 +28,13 @@ function service(catalog: OdpCatalog = createStaticCatalog({ offerings })) {
     document: {
       name: "Example",
       description: "Example catalog",
+      documentation_url: "/developers/",
       language: "en",
       localizations: ["en"],
-      http: { endpoint_base: "/odp" }
+      http: { endpoint_base: "/odp" },
+      status_url: "https://status.example.com/",
+      support_url: "/support/",
+      website_url: "/store/"
     }
   });
 }
@@ -49,7 +53,13 @@ describe("ODP Service", () => {
     const response = await odp.fetch(new Request("https://example.com/.well-known/odp"));
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/odp+json");
-    await expect(response.json()).resolves.toMatchObject({ name: "Example" });
+    await expect(response.json()).resolves.toMatchObject({
+      documentation_url: "/developers/",
+      name: "Example",
+      status_url: "https://status.example.com/",
+      support_url: "/support/",
+      website_url: "/store/"
+    });
   });
 
   it("advertises configured operation authentication", () => {

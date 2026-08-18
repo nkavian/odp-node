@@ -65,6 +65,22 @@ describe("Service Document validation", () => {
     expect(parseServiceDocument(document)).toEqual(document);
   });
 
+  it("parses optional Service resource links", () => {
+    const document = {
+      ...serviceDocument,
+      documentation_url: "/developers/",
+      status_url: "https://status.example.com/",
+      support_url: "/support/",
+      website_url: "/store/"
+    };
+
+    expect(parseServiceDocument(document)).toEqual(document);
+    expect(
+      safeParseServiceDocument({ ...document, support_url: "//support.example.com/" }).success
+    ).toBe(false);
+    expect(safeParseServiceDocument({ ...document, web_url: "/store/" }).success).toBe(false);
+  });
+
   it("requires complete branding metadata", () => {
     expect(
       safeParseServiceDocument({
