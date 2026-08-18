@@ -1,5 +1,14 @@
 # @offering-protocol/directory
 
+## 0.2.4
+
+### Patch Changes
+
+- [#31](https://github.com/offering-protocol/odp-node/pull/31) [`2e02552`](https://github.com/offering-protocol/odp-node/commit/2e02552e1ac49d0157e979cc6dfc880c1a9689db) Thanks [@nkavian](https://github.com/nkavian)! - Support optional Service website, documentation, support, and status links.
+
+- Updated dependencies [[`2e02552`](https://github.com/offering-protocol/odp-node/commit/2e02552e1ac49d0157e979cc6dfc880c1a9689db)]:
+  - @offering-protocol/core@0.3.2
+
 ## 0.2.3
 
 ### Patch Changes
