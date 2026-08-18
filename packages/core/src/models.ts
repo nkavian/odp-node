@@ -110,6 +110,7 @@ export interface ServiceDocument extends Record<string, unknown> {
   odp_version: OdpVersion;
   name: string;
   description: string;
+  documentation_url?: string;
   language: string;
   localizations: string[];
   keywords?: string[];
@@ -118,6 +119,9 @@ export interface ServiceDocument extends Record<string, unknown> {
   http: ServiceHttp;
   protocols?: ServiceProtocols;
   search_capabilities?: SearchCapabilities;
+  status_url?: string;
+  support_url?: string;
+  website_url?: string;
 }
 
 export interface Collection extends Record<string, unknown> {

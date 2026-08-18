@@ -54,12 +54,16 @@ export interface DirectoryService extends Record<string, unknown> {
   service_origin: string;
   name: string;
   description: string;
+  documentation_url?: string;
   language: string;
   localizations: string[];
   keywords?: string[];
   operations: OperationDescriptor[];
   protocols?: ServiceProtocols;
   indexed_at: string;
+  status_url?: string;
+  support_url?: string;
+  website_url?: string;
 }
 
 export interface DirectoryFacet<Value = string> {
@@ -323,12 +327,18 @@ function parseService(value: unknown): DirectoryService {
     odp_version: "1.0",
     name: object["name"],
     description: object["description"],
+    ...(object["documentation_url"] === undefined
+      ? {}
+      : { documentation_url: object["documentation_url"] }),
     language: object["language"],
     localizations: object["localizations"],
     ...(object["keywords"] === undefined ? {} : { keywords: object["keywords"] }),
     operations: object["operations"],
     http: { endpoint_base: "/" },
-    ...(object["protocols"] === undefined ? {} : { protocols: object["protocols"] })
+    ...(object["protocols"] === undefined ? {} : { protocols: object["protocols"] }),
+    ...(object["status_url"] === undefined ? {} : { status_url: object["status_url"] }),
+    ...(object["support_url"] === undefined ? {} : { support_url: object["support_url"] }),
+    ...(object["website_url"] === undefined ? {} : { website_url: object["website_url"] })
   });
   const indexedAt = requireText(object["indexed_at"], "indexed_at", 1, 64);
   if (Number.isNaN(Date.parse(indexedAt))) throw new TypeError("indexed_at must be a date-time");
@@ -337,12 +347,18 @@ function parseService(value: unknown): DirectoryService {
     service_origin: serviceOrigin,
     name: document.name,
     description: document.description,
+    ...(document.documentation_url === undefined
+      ? {}
+      : { documentation_url: document.documentation_url }),
     language: document.language,
     localizations: document.localizations,
     operations: document.operations,
     indexed_at: indexedAt,
     ...(document.keywords === undefined ? {} : { keywords: document.keywords }),
-    ...(document.protocols === undefined ? {} : { protocols: document.protocols })
+    ...(document.protocols === undefined ? {} : { protocols: document.protocols }),
+    ...(document.status_url === undefined ? {} : { status_url: document.status_url }),
+    ...(document.support_url === undefined ? {} : { support_url: document.support_url }),
+    ...(document.website_url === undefined ? {} : { website_url: document.website_url })
   };
 }
 

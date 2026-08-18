@@ -6,6 +6,7 @@ const service = {
   service_origin: "https://compute.example",
   name: "Compute",
   description: "GPU compute",
+  documentation_url: "/developers/",
   language: "en",
   localizations: ["en"],
   keywords: ["gpu"],
@@ -16,7 +17,10 @@ const service = {
   protocols: {
     payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }]
   },
-  indexed_at: "2026-08-02T00:00:00Z"
+  indexed_at: "2026-08-02T00:00:00Z",
+  status_url: "https://status.compute.example/",
+  support_url: "/support/",
+  website_url: "/compute/"
 };
 
 function inputUrl(input: string | URL | Request): string {
@@ -78,8 +82,10 @@ describe("Directory client", () => {
       limit: 25
     });
     let facets: unknown;
+    let result: unknown;
     for await (const page of search.pages) {
       facets = page.facets;
+      result = page.items[0];
       break;
     }
     expect(requestUrl).toBe("https://api.inflowpay.ai/v1/services/search");
@@ -92,6 +98,12 @@ describe("Directory client", () => {
         payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }]
       },
       limit: 25
+    });
+    expect(result).toMatchObject({
+      documentation_url: "/developers/",
+      status_url: "https://status.compute.example/",
+      support_url: "/support/",
+      website_url: "/compute/"
     });
     expect(facets).toEqual({
       enrollment: [{ value: { name: "aep" }, count: 1 }],
