@@ -89,7 +89,7 @@ export type ServiceBrandingImageType = "image/png" | "image/svg+xml" | "image/we
 
 export interface ServiceBrandingImage {
   src: string;
-  type: ServiceBrandingImageType;
+  type?: ServiceBrandingImageType;
 }
 
 export interface ServiceBranding {
@@ -124,12 +124,24 @@ export interface ServiceDocument extends Record<string, unknown> {
   website_url?: string;
 }
 
+export type ResourceImageType =
+  "image/avif" | "image/jpeg" | "image/png" | "image/svg+xml" | "image/webp";
+
+export interface ResourceImage {
+  alt?: string;
+  height?: number;
+  src: string;
+  type?: ResourceImageType;
+  width?: number;
+}
+
 export interface Collection extends Record<string, unknown> {
   auth_expands?: true;
   odp_version: OdpVersion;
   id: string;
   name: string;
   description?: string;
+  images?: ResourceImage[];
   language?: string;
   localizations?: string[];
   parent_ids?: string[];
@@ -143,6 +155,7 @@ export interface TerseCollection extends Record<string, unknown> {
   name: string;
   odp_version?: OdpVersion;
   description?: string;
+  images?: ResourceImage[];
   language?: string;
   localizations?: string[];
   parent_ids?: string[];
@@ -193,6 +206,7 @@ export interface Offering extends Record<string, unknown> {
   id: string;
   name: string;
   description?: string;
+  images?: ResourceImage[];
   language?: string;
   localizations?: string[];
   web_url?: string;
@@ -209,6 +223,7 @@ export interface TerseOffering extends Record<string, unknown> {
   name: string;
   odp_version?: OdpVersion;
   description?: string;
+  images?: ResourceImage[];
   language?: string;
   localizations?: string[];
   web_url?: string;
