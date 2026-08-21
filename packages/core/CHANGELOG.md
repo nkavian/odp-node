@@ -1,5 +1,11 @@
 # @offering-protocol/core
 
+## 0.3.3
+
+### Patch Changes
+
+- [#33](https://github.com/offering-protocol/odp-node/pull/33) [`ddfb839`](https://github.com/offering-protocol/odp-node/commit/ddfb839a7e1450ee382575b933f125e087f4922f) Thanks [@nkavian](https://github.com/nkavian)! - Support optional ordered images on Offerings and Collections and optional media-type hints on Service branding.
+
 ## 0.3.2
 
 ### Patch Changes
