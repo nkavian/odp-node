@@ -4,7 +4,7 @@
   "title": "ODP Service branding image",
   "type": "object",
   "additionalProperties": false,
-  "required": ["src", "type"],
+  "required": ["src"],
   "properties": {
     "src": {
       "$ref": "resource-reference.schema.json"

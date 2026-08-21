@@ -4,6 +4,7 @@ import {
   type AuthenticationRequirement,
   type OfferingAction,
   type PricePreview,
+  type ResourceImage,
   type SchemaReference
 } from "@offering-protocol/core";
 
@@ -44,6 +45,7 @@ export interface OfferingDetails extends Record<string, unknown> {
   id: string;
   name: string;
   description?: string;
+  images?: ResourceImage[];
   language?: string;
   localizations?: string[];
   web_url?: string;

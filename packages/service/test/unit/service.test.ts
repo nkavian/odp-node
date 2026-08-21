@@ -8,6 +8,10 @@ const offerings = [
     id: "gpu-h100",
     name: "H100 GPU",
     description: "Dedicated accelerator",
+    images: [
+      { src: "/images/gpu-front.webp", type: "image/webp" as const },
+      { src: "/images/gpu-back.webp", type: "image/webp" as const }
+    ],
     attributes: { memory: 80 },
     schema: { url: "/schemas/gpu.json" },
     actions: [
@@ -119,12 +123,17 @@ describe("ODP Service", () => {
     const first = (list["items"] as Record<string, unknown>[])[0];
     expect(first).not.toHaveProperty("actions");
     expect(first).not.toHaveProperty("attributes");
+    expect(first).toHaveProperty("images", [{ src: "/images/gpu-front.webp", type: "image/webp" }]);
 
     const detail = await body(
       await odp.fetch(new Request("https://example.com/odp/offerings/gpu-h100"))
     );
     expect(detail).toHaveProperty("actions");
     expect(detail).toHaveProperty("attributes.memory", 80);
+    expect(detail).toHaveProperty("images", [
+      { src: "/images/gpu-front.webp", type: "image/webp" },
+      { src: "/images/gpu-back.webp", type: "image/webp" }
+    ]);
   });
 
   it("provides stable static-catalog continuation links", async () => {

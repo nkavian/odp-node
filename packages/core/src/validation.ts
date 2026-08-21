@@ -100,7 +100,8 @@ function serviceDocumentIssues(value: ServiceDocument): ValidationIssue[] {
   return issues;
 }
 
-function localizedRepresentationIssues(value: {
+function representationIssues(value: {
+  images?: { src: string }[];
   language?: string;
   localizations?: string[];
 }): ValidationIssue[] {
@@ -139,6 +140,15 @@ function localizedRepresentationIssues(value: {
       path: "/localizations",
       keyword: "contains-language",
       message: "must contain the representation language",
+      params: {}
+    });
+  }
+  const imageSources = value.images?.map(({ src }) => src);
+  if (imageSources !== undefined && new Set(imageSources).size !== imageSources.length) {
+    issues.push({
+      path: "/images",
+      keyword: "unique-image-source",
+      message: "must contain unique image sources",
       params: {}
     });
   }
@@ -207,12 +217,12 @@ const serviceDocument = validator<ServiceDocument>(
 const collection = validator<Collection>(
   "https://offeringprotocol.org/schemas/collection.schema.json",
   "Collection",
-  localizedRepresentationIssues
+  representationIssues
 );
 const offering = validator<Offering>(
   "https://offeringprotocol.org/schemas/offering.schema.json",
   "Offering",
-  localizedRepresentationIssues
+  representationIssues
 );
 const problemDetails = validator<ProblemDetails>(
   "https://offeringprotocol.org/schemas/problem-details.schema.json",

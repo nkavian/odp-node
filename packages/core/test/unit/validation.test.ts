@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import {
   OdpValidationError,
-  parseOffering,
+  parseCollection,
   parseFilterDefinition,
+  parseOffering,
   parseSortDefinition,
   parseProblemResponse,
   parseServiceDocument,
@@ -53,7 +54,7 @@ describe("Service Document validation", () => {
     const document = {
       ...serviceDocument,
       branding: {
-        icon: { src: "/branding/icon.svg", type: "image/svg+xml" },
+        icon: { src: "/branding/icon.svg" },
         logo: { src: "/branding/logo.webp", type: "image/webp" }
       },
       http: {
@@ -169,6 +170,27 @@ describe("search capability validation", () => {
 });
 
 describe("Collection validation", () => {
+  it("parses optional Collection images", () => {
+    const collection = {
+      odp_version: "1.0",
+      id: "gpus",
+      name: "GPUs",
+      images: [{ src: "/images/gpus.jpg" }]
+    };
+    expect(parseCollection(collection)).toEqual(collection);
+  });
+
+  it("rejects duplicate Collection image sources", () => {
+    expect(
+      safeParseCollection({
+        odp_version: "1.0",
+        id: "gpus",
+        name: "GPUs",
+        images: [{ src: "/images/gpus.jpg" }, { src: "/images/gpus.jpg" }]
+      }).success
+    ).toBe(false);
+  });
+
   it("validates localization relationships without case-sensitive duplicates", () => {
     expect(
       safeParseCollection({
@@ -207,6 +229,35 @@ describe("Offering validation", () => {
   it("parses a minimal full Offering", () => {
     const offering = { odp_version: "1.0", id: "handbook", name: "Agent handbook" };
     expect(parseOffering(offering)).toEqual(offering);
+  });
+
+  it("parses optional Offering images", () => {
+    const offering = {
+      odp_version: "1.0",
+      id: "handbook",
+      name: "Agent handbook",
+      images: [
+        {
+          alt: "Agent handbook cover",
+          height: 1200,
+          src: "/images/handbook.webp",
+          type: "image/webp",
+          width: 900
+        }
+      ]
+    };
+    expect(parseOffering(offering)).toEqual(offering);
+  });
+
+  it("rejects duplicate Offering image sources", () => {
+    expect(
+      safeParseOffering({
+        odp_version: "1.0",
+        id: "handbook",
+        name: "Agent handbook",
+        images: [{ src: "/images/handbook.webp" }, { src: "/images/handbook.webp" }]
+      }).success
+    ).toBe(false);
   });
 
   it("requires a schema when attributes are present", () => {

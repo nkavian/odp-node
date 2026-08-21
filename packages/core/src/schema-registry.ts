@@ -38,6 +38,7 @@ import schema29 from "./schemas/protocol-version.schema.json" with { type: "json
 import schema30 from "./schemas/refinement-bucket.schema.json" with { type: "json" };
 import schema31 from "./schemas/refinement-group.schema.json" with { type: "json" };
 import schema32 from "./schemas/representation.schema.json" with { type: "json" };
+import resourceImageSchema from "./schemas/resource-image.schema.json" with { type: "json" };
 import schema33 from "./schemas/resource-identity.schema.json" with { type: "json" };
 import schema34 from "./schemas/resource-reference.schema.json" with { type: "json" };
 import schema35 from "./schemas/schema-reference.schema.json" with { type: "json" };
@@ -101,6 +102,7 @@ const schemas = [
   schema30,
   schema31,
   schema32,
+  resourceImageSchema,
   schema33,
   schema34,
   schema35,
