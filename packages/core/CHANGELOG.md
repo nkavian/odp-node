@@ -1,5 +1,11 @@
 # @offering-protocol/core
 
+## 0.3.4
+
+### Patch Changes
+
+- [#36](https://github.com/offering-protocol/odp-node/pull/36) [`16cf69c`](https://github.com/offering-protocol/odp-node/commit/16cf69cded30af44d60213c1c8354920f289a1f9) Thanks [@nkavian](https://github.com/nkavian)! - Support optional MCP Streamable HTTP endpoint discovery in ODP Service Documents.
+
 ## 0.3.3
 
 ### Patch Changes
