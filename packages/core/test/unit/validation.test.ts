@@ -82,6 +82,28 @@ describe("Service Document validation", () => {
     expect(safeParseServiceDocument({ ...document, web_url: "/store/" }).success).toBe(false);
   });
 
+  it("parses optional MCP endpoints", () => {
+    const document = {
+      ...serviceDocument,
+      mcp: [
+        {
+          description: "Browse the public catalog.",
+          name: "Catalog",
+          type: "streamable-http",
+          url: "/mcp"
+        }
+      ]
+    };
+
+    expect(parseServiceDocument(document)).toEqual(document);
+    expect(
+      safeParseServiceDocument({
+        ...document,
+        mcp: [{ type: "sse", url: "/mcp" }]
+      }).success
+    ).toBe(false);
+  });
+
   it("requires complete branding metadata", () => {
     expect(
       safeParseServiceDocument({

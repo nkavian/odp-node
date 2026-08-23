@@ -35,6 +35,7 @@ function service(catalog: OdpCatalog = createStaticCatalog({ offerings })) {
       documentation_url: "/developers/",
       language: "en",
       localizations: ["en"],
+      mcp: [{ name: "Catalog", type: "streamable-http", url: "/mcp" }],
       http: { endpoint_base: "/odp" },
       status_url: "https://status.example.com/",
       support_url: "/support/",
@@ -59,6 +60,7 @@ describe("ODP Service", () => {
     expect(response.headers.get("content-type")).toContain("application/odp+json");
     await expect(response.json()).resolves.toMatchObject({
       documentation_url: "/developers/",
+      mcp: [{ name: "Catalog", type: "streamable-http", url: "/mcp" }],
       name: "Example",
       status_url: "https://status.example.com/",
       support_url: "/support/",
