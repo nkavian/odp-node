@@ -101,6 +101,13 @@ export interface ServiceOpenApi {
   url: string;
 }
 
+export interface McpEndpoint {
+  description?: string;
+  name?: string;
+  type: "streamable-http";
+  url: string;
+}
+
 export interface ServiceHttp {
   endpoint_base: string;
   openapi?: ServiceOpenApi;
@@ -111,9 +118,10 @@ export interface ServiceDocument extends Record<string, unknown> {
   name: string;
   description: string;
   documentation_url?: string;
+  keywords?: string[];
   language: string;
   localizations: string[];
-  keywords?: string[];
+  mcp?: McpEndpoint[];
   operations: OperationDescriptor[];
   branding?: ServiceBranding;
   http: ServiceHttp;

@@ -22,6 +22,7 @@ import schema16 from "./schemas/http-action-target.schema.json" with { type: "js
 import schema17 from "./schemas/invalid-parameter.schema.json" with { type: "json" };
 import schema18 from "./schemas/local-resource-identifier-list.schema.json" with { type: "json" };
 import schema19 from "./schemas/local-resource-identifier.schema.json" with { type: "json" };
+import mcpEndpointSchema from "./schemas/mcp-endpoint.schema.json" with { type: "json" };
 import schema20 from "./schemas/offering-search-request.schema.json" with { type: "json" };
 import schema21 from "./schemas/offering-search-response.schema.json" with { type: "json" };
 import schema22 from "./schemas/offering.schema.json" with { type: "json" };
@@ -86,6 +87,7 @@ const schemas = [
   schema17,
   schema18,
   schema19,
+  mcpEndpointSchema,
   schema20,
   schema21,
   schema22,
