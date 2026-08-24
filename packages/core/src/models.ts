@@ -125,6 +125,7 @@ export interface ServiceDocument extends Record<string, unknown> {
   operations: OperationDescriptor[];
   branding?: ServiceBranding;
   http: ServiceHttp;
+  payment_origins?: string[];
   protocols?: ServiceProtocols;
   search_capabilities?: SearchCapabilities;
   status_url?: string;

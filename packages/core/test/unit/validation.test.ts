@@ -104,6 +104,21 @@ describe("Service Document validation", () => {
     ).toBe(false);
   });
 
+  it("parses payment origins", () => {
+    const document = {
+      ...serviceDocument,
+      payment_origins: ["https://payments.example.com"]
+    };
+
+    expect(parseServiceDocument(document)).toEqual(document);
+    expect(
+      safeParseServiceDocument({
+        ...document,
+        payment_origins: ["https://payments.example.com", "https://payments.example.com"]
+      }).success
+    ).toBe(true);
+  });
+
   it("requires complete branding metadata", () => {
     expect(
       safeParseServiceDocument({
