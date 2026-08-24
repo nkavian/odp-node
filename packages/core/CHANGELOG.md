@@ -1,5 +1,11 @@
 # @offering-protocol/core
 
+## 0.3.5
+
+### Patch Changes
+
+- [#38](https://github.com/offering-protocol/odp-node/pull/38) [`28914d4`](https://github.com/offering-protocol/odp-node/commit/28914d455165183f1b2394096797989c28baab32) Thanks [@nkavian](https://github.com/nkavian)! - Add payment origin declarations to Service Documents.
+
 ## 0.3.4
 
 ### Patch Changes
