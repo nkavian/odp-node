@@ -53,7 +53,11 @@ const response = await odp.fetch(request);
 ```
 
 The static catalog validates its configuration immediately and uses opaque, integrity-protected
-stateless continuation cursors. It is intended for small catalogs, examples, and tests.
+stateless continuation cursors. Pages default to 50 items, accept limits through 100, and issue
+continuations that expire after one hour. The continuation signing key is generated when the static
+catalog is created, so outstanding continuations do not survive a process restart and cannot be
+shared across independently created instances. It is intended for small catalogs, examples, and
+tests.
 
 ## Storage-backed catalogs
 
@@ -113,3 +117,18 @@ Catalog handlers may throw `OdpServiceError` to return an intentional ODP Proble
 Unexpected handler failures produce a generic `500` response without exposing implementation data.
 AEP, MPP, x402, and application authorization wrap `service.fetch`; the package does not infer an
 access mode or invoke payment and enrollment protocols.
+
+## Errors
+
+Throw `OdpServiceError` from a catalog handler when the caller should receive a specific HTTP
+status, ODP error code, and safe message. Request parsing, media negotiation, operation routing, and
+response validation failures are converted into ODP Problem Details by the runtime. Unexpected
+exceptions are not exposed to the caller.
+
+## Related Documentation
+
+- [Core models and validation](../core/README.md)
+- [Agent integration](../agent/README.md)
+- [Small Service example](../../examples/odp-service-small/README.md)
+- [Marketplace Service example](../../examples/odp-service-marketplace/README.md)
+- [Normative specification and schemas](https://www.offeringprotocol.org/)

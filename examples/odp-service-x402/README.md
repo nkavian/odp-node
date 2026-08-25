@@ -8,6 +8,12 @@ accepted payment option.
 
 ## Run
 
+### Prerequisite
+
+This example requires an InFlow **Seller** account and an API key created in its sandbox dashboard:
+
+- [Sandbox registration](https://sandbox.inflowpay.ai) for testing
+
 Copy `.env.example` to `.env`, set the sandbox `INFLOW_API_KEY`, then build and start the example:
 
 ```sh

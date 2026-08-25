@@ -8,6 +8,12 @@ option.
 
 ## Run
 
+### Prerequisite
+
+This example requires an InFlow **Seller** account and an API key created in its sandbox dashboard:
+
+- [Sandbox registration](https://sandbox.inflowpay.ai) for testing
+
 Start the ephemeral AEP Platform, which serves the Service DID used by this example:
 
 ```sh

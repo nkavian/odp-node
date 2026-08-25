@@ -66,3 +66,16 @@ is not required by the directory contract.
 ```ts
 const suggestions = await directory.suggestServices({ prefix: "gp", limit: 10 });
 ```
+
+## Errors
+
+Invalid local arguments throw `TypeError`. HTTP failures throw `DirectoryRequestError`, which
+preserves the response status, headers, and bounded response message. The client rejects
+cross-origin redirects and continuations before retrieving them.
+
+## Related Documentation
+
+- [Agent integration](../agent/README.md)
+- [Core models and validation](../core/README.md)
+- [Canonical directory](https://directory.inflowpay.ai/)
+- [Normative specification and schemas](https://www.offeringprotocol.org/)
