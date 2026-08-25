@@ -152,3 +152,19 @@ Attribute Schema and OpenAPI retrieval uses `supportingTransport`, which default
 `fetch` rather than the catalog `transport`. This keeps payment and enrollment credentials out of
 supporting-document requests. Both transports may share the client's cache; supporting resources
 use an anonymous cache partition.
+
+## Errors
+
+`OdpInspectionError` reports an invalid or unavailable Service Document. Catalog HTTP failures use
+`OdpRequestError`, which preserves the response status, headers, and parsed ODP Problem Details when
+available. Invalid protocol resources throw `OdpValidationError` from the Core package. Federated
+discovery converts an individual Service failure into an `issue` event so other Service results
+remain available.
+
+## Related Documentation
+
+- [Directory integration](../directory/README.md)
+- [Core models and validation](../core/README.md)
+- [Service integration](../service/README.md)
+- [Runnable Agent example](../../examples/odp-agent-discovery/README.md)
+- [Normative specification and schemas](https://www.offeringprotocol.org/)
