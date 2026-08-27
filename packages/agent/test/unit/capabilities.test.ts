@@ -26,7 +26,8 @@ function inspection(
         { authentication: "not-required", name: "get-offering" },
         { authentication: "not-required", name: "search-offerings" }
       ],
-      payments: []
+      payments: [],
+      trust: []
     },
     document: {
       odp_version: "1.0",

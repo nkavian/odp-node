@@ -16,6 +16,7 @@ export async function createMockDirectory(serviceUrls: string[]): Promise<MockDi
     try {
       const inspection = await createOdpServiceClient({
         serviceUrl,
+        allowLocalNetwork: true,
         cachePartition: "mock-directory",
         signal: AbortSignal.timeout(2_000)
       }).inspect();

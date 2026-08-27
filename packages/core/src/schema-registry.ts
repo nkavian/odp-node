@@ -55,6 +55,7 @@ import schema41 from "./schemas/sort-definition-page.schema.json" with { type: "
 import schema42 from "./schemas/sort-definition.schema.json" with { type: "json" };
 import schema43 from "./schemas/sort-key.schema.json" with { type: "json" };
 import schema44 from "./schemas/top-level-document.schema.json" with { type: "json" };
+import trustProtocolSchema from "./schemas/trust-protocol.schema.json" with { type: "json" };
 
 export const ajv = new Ajv2020({
   allErrors: true,
@@ -119,6 +120,7 @@ const schemas = [
   schema41,
   schema42,
   schema43,
-  schema44
+  schema44,
+  trustProtocolSchema
 ];
 for (const schema of schemas) ajv.addSchema(schema);

@@ -43,7 +43,9 @@
     "@offering-protocol/directory": "workspace:^",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
-    "http-cache-semantics": "^4.2.0"
+    "http-cache-semantics": "^4.2.0",
+    "ipaddr.js": "^2.5.0",
+    "undici": "^7.29.0"
   },
   "publishConfig": {
     "access": "public",

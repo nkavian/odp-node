@@ -48,9 +48,14 @@ export interface PaymentProtocol {
   options?: PaymentOption[];
 }
 
+export interface TrustProtocol {
+  name: "tap";
+}
+
 export interface ServiceProtocols {
   enrollment?: [EnrollmentProtocol];
   payments?: [PaymentProtocol] | [PaymentProtocol, PaymentProtocol];
+  trust?: [TrustProtocol];
 }
 
 export type FilterType =

@@ -124,6 +124,7 @@ describe("ODP Service", () => {
     const list = await body(await odp.fetch(new Request("https://example.com/odp/offerings")));
     const first = (list["items"] as Record<string, unknown>[])[0];
     expect(first).not.toHaveProperty("actions");
+    expect(first).not.toHaveProperty("odp_version");
     expect(first).not.toHaveProperty("attributes");
     expect(first).toHaveProperty("images", [{ src: "/images/gpu-front.webp", type: "image/webp" }]);
 
@@ -136,6 +137,15 @@ describe("ODP Service", () => {
       { src: "/images/gpu-front.webp", type: "image/webp" },
       { src: "/images/gpu-back.webp", type: "image/webp" }
     ]);
+
+    const terseDetail = await body(
+      await odp.fetch(
+        new Request("https://example.com/odp/offerings/gpu-h100?representation=terse")
+      )
+    );
+    expect(terseDetail).toMatchObject({ odp_version: "1.0", id: "gpu-h100" });
+    expect(terseDetail).not.toHaveProperty("actions");
+    expect(terseDetail).not.toHaveProperty("attributes");
   });
 
   it("provides stable static-catalog continuation links", async () => {
@@ -271,6 +281,48 @@ describe("ODP Service", () => {
     expect(
       await odp.fetch(new Request("https://example.com/odp/offerings/requested"))
     ).toMatchObject({ status: 500 });
+  });
+
+  it("rejects catalog pages that exceed the protocol item limit", async () => {
+    const odp = service({
+      listOfferings: () => ({
+        odp_version: "1.0",
+        items: Array.from({ length: 101 }, (_, index) => ({
+          id: `offering-${index}`,
+          name: `Offering ${index}`
+        }))
+      }),
+      getOffering: () => undefined
+    });
+    expect(await odp.fetch(new Request("https://example.com/odp/offerings"))).toMatchObject({
+      status: 500
+    });
+  });
+
+  it("serves Collection details and rejects oversized Collection pages", async () => {
+    const odp = service({
+      listOfferings: () => ({ odp_version: "1.0", items: [] }),
+      getOffering: () => undefined,
+      listCollections: () => ({
+        odp_version: "1.0",
+        items: Array.from({ length: 101 }, (_, index) => ({
+          id: `collection-${index}`,
+          name: `Collection ${index}`
+        }))
+      }),
+      getCollection: (id) => ({ odp_version: "1.0", id, name: "Plants" })
+    });
+    const detail = await odp.fetch(
+      new Request("https://example.com/odp/collections/indoor-plants")
+    );
+    await expect(detail.json()).resolves.toMatchObject({
+      odp_version: "1.0",
+      id: "indoor-plants",
+      name: "Plants"
+    });
+    expect(await odp.fetch(new Request("https://example.com/odp/collections"))).toMatchObject({
+      status: 500
+    });
   });
 
   it("does not materialize marketplace catalogs in the Service runtime", async () => {

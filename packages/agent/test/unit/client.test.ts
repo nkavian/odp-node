@@ -213,6 +213,37 @@ describe("ODP Service Collection client", () => {
     expect(headers?.get("accept-language")).toBe("ja");
   });
 
+  it("rejects Full Collections containing terse projection metadata", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({
+            odp_version: "1.0",
+            id: "compute",
+            name: "Compute",
+            detail_fields: ["description"]
+          })
+    );
+    await expect(client(transport).getCollection("compute")).rejects.toThrow("Full Collection");
+  });
+
+  it("rejects Collection pages that exceed the protocol item limit", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({
+            odp_version: "1.0",
+            items: Array.from({ length: 101 }, (_, index) => ({
+              id: `collection-${index}`,
+              name: `Collection ${index}`
+            }))
+          })
+    );
+    await expect(
+      client(transport).listCollections().pages[Symbol.asyncIterator]().next()
+    ).rejects.toThrow("Invalid ODP page envelope");
+  });
+
   it("propagates per-operation cancellation to Service inspection", async () => {
     const controller = new AbortController();
     controller.abort(new Error("cancelled"));
@@ -437,6 +468,20 @@ describe("ODP Service Offering client", () => {
     expect(ids).toEqual(["one", "two"]);
   });
 
+  it("rejects Full Offerings containing terse projection metadata", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({
+            odp_version: "1.0",
+            id: "gpu",
+            name: "GPU",
+            detail_fields: ["attributes.memory"]
+          })
+    );
+    await expect(client(transport).getOffering("gpu")).rejects.toThrow("Full Offering");
+  });
+
   it("uses the fixed Collection membership path", async () => {
     let path = "";
     const transport = transportFor((url) => {
@@ -534,6 +579,138 @@ describe("ODP Service Offering client", () => {
     expect(offering).not.toHaveProperty("issues");
     expect(supportingTransport).toHaveBeenCalledTimes(2);
   });
+
+  it("honors nested schema resource identifiers when resolving references", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({
+            odp_version: "1.0",
+            id: "gpu",
+            name: "GPU",
+            schema: { url: "https://schemas.example/catalog.json" },
+            attributes: { specifications: { memory: 80 } }
+          })
+    );
+    const requested: string[] = [];
+    const supportingTransport = transportFor((url) => {
+      requested.push(String(url));
+      const document =
+        url.pathname === "/specifications/memory.json"
+          ? {
+              $schema: "https://json-schema.org/draft/2020-12/schema",
+              type: "number"
+            }
+          : {
+              $schema: "https://json-schema.org/draft/2020-12/schema",
+              $id: "https://schemas.example/catalog.json",
+              type: "object",
+              properties: {
+                specifications: {
+                  $id: "specifications/",
+                  type: "object",
+                  properties: { memory: { $ref: "memory.json" } }
+                }
+              }
+            };
+      return response(document, 200, "application/schema+json");
+    });
+    const offering = await createOdpServiceClient({
+      serviceUrl: "https://example.com",
+      transport,
+      supportingTransport
+    }).getOffering("gpu");
+    expect(offering).not.toHaveProperty("issues");
+    expect(requested).toEqual([
+      "https://schemas.example/catalog.json",
+      "https://schemas.example/specifications/memory.json"
+    ]);
+  });
+
+  it("composes external schema resources with fragment-only dynamic references", async () => {
+    const transport = transportFor((url) =>
+      url.pathname === "/.well-known/odp"
+        ? response(service)
+        : response({
+            odp_version: "1.0",
+            id: "tree",
+            name: "Tree",
+            schema: { url: "https://schemas.example/offering.json" },
+            attributes: { name: "root", children: [{ name: "child" }] }
+          })
+    );
+    const supportingTransport = transportFor((url) =>
+      response(
+        url.pathname === "/common.json"
+          ? {
+              $schema: "https://json-schema.org/draft/2020-12/schema",
+              $id: "https://schemas.example/common.json",
+              $dynamicAnchor: "node",
+              type: "object",
+              required: ["name"],
+              properties: {
+                name: { type: "string" },
+                children: { type: "array", items: { $dynamicRef: "#node" } }
+              }
+            }
+          : {
+              $schema: "https://json-schema.org/draft/2020-12/schema",
+              $id: "https://schemas.example/offering.json",
+              $ref: "https://schemas.example/common.json"
+            },
+        200,
+        "application/schema+json"
+      )
+    );
+    const offering = await createOdpServiceClient({
+      serviceUrl: "https://example.com",
+      transport,
+      supportingTransport
+    }).getOffering("tree");
+    expect(offering).toMatchObject({
+      attributes: { name: "root", children: [{ name: "child" }] }
+    });
+    expect(offering).not.toHaveProperty("issues");
+  });
+
+  it.each(["https://schemas.example/common.json#node", "common.json#node", null])(
+    "reports unsupported dynamic reference %j as an Attribute Schema issue",
+    async (reference) => {
+      const transport = transportFor((url) =>
+        url.pathname === "/.well-known/odp"
+          ? response(service)
+          : response({
+              odp_version: "1.0",
+              id: "tree",
+              name: "Tree",
+              schema: { url: "https://schemas.example/offering.json" },
+              attributes: { name: "root" }
+            })
+      );
+      const supportingTransport = transportFor(() =>
+        response(
+          {
+            $schema: "https://json-schema.org/draft/2020-12/schema",
+            $dynamicRef: reference
+          },
+          200,
+          "application/schema+json"
+        )
+      );
+      const offering = await createOdpServiceClient({
+        serviceUrl: "https://example.com",
+        transport,
+        supportingTransport
+      }).getOffering("tree");
+      expect(offering).not.toHaveProperty("attributes");
+      expect(offering.issues).toEqual([
+        {
+          scope: "attribute_schema",
+          message: "ODP Attribute Schema $dynamicRef must be a fragment-only reference"
+        }
+      ]);
+    }
+  );
 
   it("quarantines attributes that fail their Attribute Schema", async () => {
     const transport = transportFor((url) =>

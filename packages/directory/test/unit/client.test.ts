@@ -15,7 +15,8 @@ const service = {
     { authentication: "not-required", name: "get-offering" }
   ],
   protocols: {
-    payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }]
+    payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }],
+    trust: [{ name: "tap" }]
   },
   indexed_at: "2026-08-02T00:00:00Z",
   status_url: "https://status.compute.example/",
@@ -101,6 +102,7 @@ describe("Directory client", () => {
     });
     expect(result).toMatchObject({
       documentation_url: "/developers/",
+      protocols: { trust: [{ name: "tap" }] },
       status_url: "https://status.compute.example/",
       support_url: "/support/",
       website_url: "/compute/"

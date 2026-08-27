@@ -53,11 +53,17 @@ const service = await inspectService({
 service.capabilities.operations;
 service.capabilities.enrollment;
 service.capabilities.payments;
+service.capabilities.trust;
 ```
 
 The agent package owns HTTP freshness, validation, conditional revalidation, redirect safety, and
 request coalescing. Responses without explicit freshness metadata receive a four-hour fallback.
 Explicit `Cache-Control` and `Expires` metadata takes precedence.
+
+The default transport resolves every destination, rejects non-public addresses, pins connections to
+the validated address, and does not inherit proxy settings. Local HTTP development is disabled by
+default. Set `allowLocalNetwork: true` only for an explicit `localhost`, `127.0.0.1`, or `[::1]`
+Service. A caller-supplied transport owns equivalent network policy.
 
 Applications that need persistence can implement `OdpCache`. The interface stores opaque cache
 records only; applications do not need to reproduce HTTP cache policy. Cache keys partition request
@@ -131,7 +137,8 @@ cache metadata. Search responses retain the explicit-freshness-only behavior des
 Full Offering retrieval resolves and bundles the referenced JSON Schema, validates `attributes`,
 and returns the self-contained schema as `attribute_schema`. Invalid or unavailable attributes are
 omitted and described in the result's scoped `issues` array. Terse retrieval does not perform this
-enrichment.
+enrichment. Cross-document schema composition uses `$ref`; `$dynamicRef` accepts only a fragment
+reference such as `#node`.
 
 Action targets are normalized to absolute URLs during full Offering retrieval. Their supporting
 documents remain lazy: `resolveAction(offeringId, actionId)` resolves a compact request schema or

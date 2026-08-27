@@ -18,7 +18,8 @@ const document = {
     payments: [
       { authentication: "required", name: "mpp" },
       { authentication: "not-required", name: "x402" }
-    ]
+    ],
+    trust: [{ name: "tap" }]
   }
 };
 
@@ -53,7 +54,8 @@ describe("inspectService", () => {
         payments: [
           { authentication: "required", name: "mpp" },
           { authentication: "not-required", name: "x402" }
-        ]
+        ],
+        trust: [{ name: "tap" }]
       }
     });
   });

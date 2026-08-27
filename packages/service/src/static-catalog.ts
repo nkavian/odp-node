@@ -112,13 +112,15 @@ function continuation(
   return `${new URL(request.url).pathname}?${query.toString()}`;
 }
 
-function represent<Full, Terse>(
+function represent<Full, Terse extends object>(
   value: Full | undefined,
   request: OdpCatalogRequest,
   terse: (value: Full) => Terse
 ): Full | Terse | undefined {
   if (value === undefined) return undefined;
-  return request.representation === "full" ? structuredClone(value) : terse(value);
+  return request.representation === "full"
+    ? structuredClone(value)
+    : { odp_version: "1.0" as const, ...terse(value) };
 }
 
 function terseOffering(offering: Offering): TerseOffering {

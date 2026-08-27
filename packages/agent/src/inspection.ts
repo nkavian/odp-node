@@ -6,10 +6,13 @@ import {
   type EnrollmentProtocol,
   type OperationDescriptor,
   type PaymentProtocol,
-  type ServiceDocument
+  type ServiceDocument,
+  type TrustProtocol
 } from "@offering-protocol/core";
 
 import type { OdpCache, OdpCacheRecord } from "./cache.js";
+import { createDefaultTransport } from "./network.js";
+import type { OdpTransport } from "./transport.js";
 
 const ODP_MEDIA_TYPE = "application/odp+json";
 const ODP_WELL_KNOWN_PATH = "/.well-known/odp";
@@ -22,6 +25,7 @@ export interface OdpServiceCapabilities {
   enrollment: EnrollmentProtocol[];
   operations: OperationDescriptor[];
   payments: PaymentProtocol[];
+  trust: TrustProtocol[];
 }
 
 export interface ServiceInspection {
@@ -38,7 +42,8 @@ export interface InspectServiceOptions {
   acceptLanguage?: string;
   cache?: OdpCache;
   fallbackTtlMs?: number;
-  fetch?: typeof fetch;
+  fetch?: OdpTransport;
+  allowLocalNetwork?: boolean;
   maxRedirects?: number;
   signal?: AbortSignal;
 }
@@ -200,7 +205,7 @@ async function fetchWithRedirects(
   headers: CachePolicy.Headers,
   serviceOrigin: string
 ): Promise<{ response: Response; finalUrl: URL }> {
-  const fetchImpl = options.fetch ?? globalThis.fetch;
+  const fetchImpl = options.fetch ?? createDefaultTransport(options.allowLocalNetwork);
   if (typeof fetchImpl !== "function")
     throw new TypeError("ODP inspection requires a fetch implementation.");
   const maximum = options.maxRedirects ?? 5;
@@ -412,7 +417,8 @@ function inspectionFrom(
     capabilities: {
       enrollment: [...(document.protocols?.enrollment ?? [])],
       operations: [...document.operations],
-      payments: [...(document.protocols?.payments ?? [])]
+      payments: [...(document.protocols?.payments ?? [])],
+      trust: [...(document.protocols?.trust ?? [])]
     }
   };
 }

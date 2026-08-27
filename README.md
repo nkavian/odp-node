@@ -155,9 +155,9 @@ See [examples/README.md](./examples/README.md) for the complete map.
 
 ## Protocol Composition
 
-ODP advertises AEP enrollment and describes authentication requirements for operations, payment
-rails, and Offering Actions. It does not duplicate their credential or payment semantics. A live
-challenge from the selected operation or Action remains authoritative.
+ODP advertises enrollment, payment, and trust protocols and describes authentication requirements
+for operations and Offering Actions. It does not duplicate their credential, payment, or trust
+semantics. A live challenge from the selected operation or Action remains authoritative.
 
 The Agent software development kit resolves an Action but never invokes it implicitly. The caller
 must select the Action and approve any authentication, payment, or state-changing request.
