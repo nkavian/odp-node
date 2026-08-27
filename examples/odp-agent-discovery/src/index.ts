@@ -31,6 +31,7 @@ for await (const service of directory.searchServices().items) {
   const serviceUrl = mock.serviceUrlFor(service.service_origin);
   const client = createOdpServiceClient({
     serviceUrl,
+    allowLocalNetwork: true,
     cachePartition: "example-public",
     initialPageSize: 2
   });

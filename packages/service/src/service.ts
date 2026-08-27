@@ -170,7 +170,10 @@ export function createOdpService(options: OdpServiceOptions): OdpService {
       if (offering === undefined) throw new RequestProblem(404, "NOT_FOUND", "Offering not found");
       const validated = validateOffering(offering, input.representation);
       requireResourceId(validated.id, offeringId, "Offering");
-      return json(validated, responseLanguage(validated, document.language));
+      return json(
+        { odp_version: "1.0", ...validated },
+        responseLanguage(validated, document.language)
+      );
     }
     if (path === "/collections") {
       requireMethod(request, "GET");
@@ -214,7 +217,10 @@ export function createOdpService(options: OdpServiceOptions): OdpService {
         throw new RequestProblem(404, "NOT_FOUND", "Collection not found");
       const validated = validateCollection(collection, input.representation);
       requireResourceId(validated.id, collectionId, "Collection");
-      return json(validated, responseLanguage(validated, document.language));
+      return json(
+        { odp_version: "1.0", ...validated },
+        responseLanguage(validated, document.language)
+      );
     }
     throw new RequestProblem(404, "NOT_FOUND", "ODP resource not found");
   }
@@ -305,6 +311,7 @@ function validateOfferingPage(
   page: OfferingPage<Offering | TerseOffering>,
   request: OdpCatalogRequest
 ): OfferingPage<Offering | TerseOffering> {
+  if (page.items.length > 100) throw new TypeError("ODP page cannot contain more than 100 items");
   return {
     ...page,
     odp_version: "1.0",
@@ -316,6 +323,7 @@ function validateCollectionPage(
   page: PageEnvelope<Collection | TerseCollection>,
   representation: Representation
 ): PageEnvelope<Collection | TerseCollection> {
+  if (page.items.length > 100) throw new TypeError("ODP page cannot contain more than 100 items");
   return {
     ...page,
     odp_version: "1.0",

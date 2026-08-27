@@ -394,6 +394,11 @@
             {
               "name": "aep"
             }
+          ],
+          "trust": [
+            {
+              "name": "tap"
+            }
           ]
         }
       }
@@ -515,6 +520,161 @@
           {
             "authentication": "not-required",
             "name": "search-offerings"
+          }
+        ],
+        "http": {
+          "endpoint_base": "/odp/"
+        }
+      }
+    },
+    {
+      "name": "tap-trust-protocol-support",
+      "valid": true,
+      "document": {
+        "odp_version": "1.0",
+        "name": "Example",
+        "description": "An example Service.",
+        "language": "en",
+        "localizations": ["en"],
+        "protocols": {
+          "trust": [
+            {
+              "name": "tap"
+            }
+          ]
+        },
+        "operations": [
+          {
+            "authentication": "not-required",
+            "name": "list-offerings"
+          },
+          {
+            "authentication": "not-required",
+            "name": "get-offering"
+          }
+        ],
+        "http": {
+          "endpoint_base": "/odp/"
+        }
+      }
+    },
+    {
+      "name": "empty-trust-protocol-category",
+      "valid": false,
+      "document": {
+        "odp_version": "1.0",
+        "name": "Example",
+        "description": "An example Service.",
+        "language": "en",
+        "localizations": ["en"],
+        "protocols": {
+          "trust": []
+        },
+        "operations": [
+          {
+            "authentication": "not-required",
+            "name": "list-offerings"
+          },
+          {
+            "authentication": "not-required",
+            "name": "get-offering"
+          }
+        ],
+        "http": {
+          "endpoint_base": "/odp/"
+        }
+      }
+    },
+    {
+      "name": "duplicate-trust-protocol",
+      "valid": false,
+      "document": {
+        "odp_version": "1.0",
+        "name": "Example",
+        "description": "An example Service.",
+        "language": "en",
+        "localizations": ["en"],
+        "protocols": {
+          "trust": [
+            {
+              "name": "tap"
+            },
+            {
+              "name": "tap"
+            }
+          ]
+        },
+        "operations": [
+          {
+            "authentication": "not-required",
+            "name": "list-offerings"
+          },
+          {
+            "authentication": "not-required",
+            "name": "get-offering"
+          }
+        ],
+        "http": {
+          "endpoint_base": "/odp/"
+        }
+      }
+    },
+    {
+      "name": "unknown-trust-protocol",
+      "valid": false,
+      "document": {
+        "odp_version": "1.0",
+        "name": "Example",
+        "description": "An example Service.",
+        "language": "en",
+        "localizations": ["en"],
+        "protocols": {
+          "trust": [
+            {
+              "name": "future-trust"
+            }
+          ]
+        },
+        "operations": [
+          {
+            "authentication": "not-required",
+            "name": "list-offerings"
+          },
+          {
+            "authentication": "not-required",
+            "name": "get-offering"
+          }
+        ],
+        "http": {
+          "endpoint_base": "/odp/"
+        }
+      }
+    },
+    {
+      "name": "trust-protocol-descriptor-has-no-extension-members",
+      "valid": false,
+      "document": {
+        "odp_version": "1.0",
+        "name": "Example",
+        "description": "An example Service.",
+        "language": "en",
+        "localizations": ["en"],
+        "protocols": {
+          "trust": [
+            {
+              "name": "tap",
+              "version": "1"
+            }
+          ]
+        },
+        "operations": [
+          {
+            "authentication": "not-required",
+            "name": "list-offerings"
+          },
+          {
+            "authentication": "not-required",
+            "name": "get-offering"
           }
         ],
         "http": {
@@ -779,6 +939,56 @@
           "endpoint_base": "/odp/"
         },
         "web_url": "/store/"
+      }
+    },
+    {
+      "name": "payment-origins-are-valid",
+      "valid": true,
+      "document": {
+        "odp_version": "1.0",
+        "name": "Example",
+        "description": "An example Service.",
+        "language": "en",
+        "localizations": ["en"],
+        "operations": [
+          {
+            "authentication": "not-required",
+            "name": "list-offerings"
+          },
+          {
+            "authentication": "not-required",
+            "name": "get-offering"
+          }
+        ],
+        "http": {
+          "endpoint_base": "/odp/"
+        },
+        "payment_origins": ["https://payments.example.com"]
+      }
+    },
+    {
+      "name": "payment-origin-duplicates-are-redundant",
+      "valid": true,
+      "document": {
+        "odp_version": "1.0",
+        "name": "Example",
+        "description": "An example Service.",
+        "language": "en",
+        "localizations": ["en"],
+        "operations": [
+          {
+            "authentication": "not-required",
+            "name": "list-offerings"
+          },
+          {
+            "authentication": "not-required",
+            "name": "get-offering"
+          }
+        ],
+        "http": {
+          "endpoint_base": "/odp/"
+        },
+        "payment_origins": ["https://payments.example.com", "https://payments.example.com"]
       }
     },
     {

@@ -17,7 +17,9 @@ const packages = {
     "@offering-protocol/directory",
     "ajv",
     "ajv-formats",
-    "http-cache-semantics"
+    "http-cache-semantics",
+    "ipaddr.js",
+    "undici"
   ],
   core: ["ajv", "ajv-formats", "bcp-47"],
   directory: ["@offering-protocol/core"],

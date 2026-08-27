@@ -66,6 +66,9 @@ Service payment descriptors may advertise a bounded `options` list such as `infl
 TypeScript type. These labels summarize compatibility; live MPP and x402 responses provide the
 authoritative payment terms.
 
+Service trust descriptors advertise supported trust protocols. A Service that accepts Visa Trusted
+Agent Protocol requests declares `protocols.trust: [{ name: "tap" }]`.
+
 ## Related Documentation
 
 - [Agent integration](../agent/README.md)

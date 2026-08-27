@@ -92,7 +92,25 @@ function requireSchema(value: unknown): Record<string, unknown> {
   const schema = value as Record<string, unknown>;
   if (schema["$schema"] !== DIALECT)
     throw new TypeError("ODP Attribute Schema must declare JSON Schema Draft 2020-12");
+  requireFragmentDynamicReferences(schema);
   return schema;
+}
+
+function requireFragmentDynamicReferences(schema: JsonSchema): void {
+  const pending: unknown[] = [schema];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value !== "object" || value === null) continue;
+    if (Array.isArray(value)) {
+      pending.push(...(value as unknown[]));
+      continue;
+    }
+    const object = value as Record<string, unknown>;
+    const reference = object["$dynamicRef"];
+    if (reference !== undefined && (typeof reference !== "string" || !reference.startsWith("#")))
+      throw new TypeError("ODP Attribute Schema $dynamicRef must be a fragment-only reference");
+    pending.push(...Object.values(object));
+  }
 }
 
 function requireSupportedVocabularies(schema: JsonSchema): void {

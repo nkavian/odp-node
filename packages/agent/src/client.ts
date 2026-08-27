@@ -36,6 +36,7 @@ import {
   type ResolvedAction
 } from "./offerings.js";
 import { resolveSchema } from "./schemas.js";
+import { createDefaultTransport } from "./network.js";
 import { requestOdpValue, type OdpTransport } from "./transport.js";
 
 export interface OdpServiceClientOptions extends Omit<
@@ -204,8 +205,9 @@ export interface OdpServiceClient {
 }
 
 export function createOdpServiceClient(options: OdpServiceClientOptions): OdpServiceClient {
-  const transport = options.transport ?? globalThis.fetch;
-  const supportingTransport = options.supportingTransport ?? globalThis.fetch;
+  const transport = options.transport ?? createDefaultTransport(options.allowLocalNetwork);
+  const supportingTransport =
+    options.supportingTransport ?? createDefaultTransport(options.allowLocalNetwork);
   const cache = options.cache ?? createInMemoryOdpCache();
   if (options.cachePartition !== undefined && options.cachePartition.length === 0)
     throw new RangeError("cachePartition must not be empty");
@@ -435,6 +437,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
         parseOffering
       )
     );
+    requireOfferingRepresentation(offering, request.representation ?? "full");
     requireResourceId(offering.id, id, "Offering");
     return {
       offering,
@@ -532,6 +535,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
         parseCollection
       );
       const collection = parseCollection(value);
+      requireCollectionRepresentation(collection, request.representation ?? "full");
       requireResourceId(collection.id, id, "Collection");
       return collection;
     },
@@ -682,6 +686,7 @@ async function* collectionPages<Item>(
         parsePage
       )
     );
+    requirePageSize(raw.items);
     const page = {
       ...raw,
       items: raw.items.map((item) =>
@@ -756,6 +761,7 @@ async function* offeringPages<Item>(
         parser
       )
     ) as OfferingPage;
+    requirePageSize(raw.items);
     if ((continuation !== undefined || count > 0) && raw.refinements !== undefined)
       throw new TypeError("ODP Offering search continuation cannot contain refinements");
     const page = {
@@ -820,8 +826,8 @@ function parseOfferingItem(
 ): Offering | TerseOffering {
   if (typeof value !== "object" || value === null) return parseOffering(value);
   const parsed = parseOffering({ odp_version: version, ...value });
+  requireOfferingRepresentation(parsed, full ? "full" : "terse");
   if (full) return parsed;
-  if ("actions" in value) throw new TypeError("ODP Terse Offering cannot contain actions");
   return structuredClone(value) as TerseOffering;
 }
 
@@ -832,8 +838,28 @@ function parseCollectionItem(
 ): Collection | TerseCollection {
   if (typeof value !== "object" || value === null) return parseCollection(value);
   const parsed = parseCollection({ odp_version: version, ...value });
+  requireCollectionRepresentation(parsed, full ? "full" : "terse");
   if (full) return parsed;
   return structuredClone(value) as TerseCollection;
+}
+
+function requireOfferingRepresentation(offering: Offering, representation: Representation): void {
+  if (representation === "terse" && "actions" in offering)
+    throw new TypeError("ODP Terse Offering cannot contain actions");
+  if (representation === "full" && "detail_fields" in offering)
+    throw new TypeError("ODP Full Offering cannot contain detail_fields");
+}
+
+function requireCollectionRepresentation(
+  collection: Collection,
+  representation: Representation
+): void {
+  if (representation === "full" && "detail_fields" in collection)
+    throw new TypeError("ODP Full Collection cannot contain detail_fields");
+}
+
+function requirePageSize(items: unknown[]): void {
+  if (items.length > 100) throw new RangeError("ODP page cannot contain more than 100 items");
 }
 
 function addRepresentation(url: URL, representation?: Representation): void {

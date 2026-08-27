@@ -15,7 +15,7 @@ const ODP_FORMAT: JsonResponseFormat = {
 };
 const requestFlights = new WeakMap<OdpCache, Map<string, Promise<unknown>>>();
 
-export type OdpTransport = typeof globalThis.fetch;
+export type OdpTransport = (url: URL, init?: RequestInit) => Promise<Response>;
 
 interface JsonResponseFormat {
   accept: string;
