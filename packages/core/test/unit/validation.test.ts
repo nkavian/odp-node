@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   OdpValidationError,
+  normalizeAgentResponse,
+  parseAgentServiceDocument,
   parseCollection,
   parseFilterDefinition,
   parseOffering,
@@ -10,6 +12,7 @@ import {
   parseServiceDocument,
   safeParseOffering,
   safeParseCollection,
+  safeParseAgentServiceDocument,
   safeParseFilterDefinition,
   safeParseServiceDocument
 } from "../../src/index.js";
@@ -159,6 +162,191 @@ describe("Service Document validation", () => {
         }
       }).success
     ).toBe(false);
+  });
+
+  it("keeps Service validation strict and filters unknown protocols for Agents", () => {
+    const document = {
+      ...serviceDocument,
+      protocols: {
+        enrollment: [{ name: "future-enrollment" }, { name: "aep" }],
+        payments: [
+          { authentication: "not-required", name: "future-payment" },
+          { authentication: "not-required", name: "mpp" },
+          { authentication: "not-required", name: "x402" }
+        ],
+        trust: [{ name: "future-trust" }, { name: "tap" }]
+      }
+    };
+
+    expect(safeParseServiceDocument(document).success).toBe(false);
+    expect(parseAgentServiceDocument(document).protocols).toEqual({
+      enrollment: [{ name: "aep" }],
+      payments: [
+        { authentication: "not-required", name: "mpp" },
+        { authentication: "not-required", name: "x402" }
+      ],
+      trust: [{ name: "tap" }]
+    });
+  });
+
+  it("omits Agent protocol categories containing only unknown names", () => {
+    expect(
+      parseAgentServiceDocument({
+        ...serviceDocument,
+        protocols: {
+          enrollment: [{ name: "future-enrollment" }],
+          payments: [{ authentication: "not-required", name: "future-payment" }],
+          trust: [{ name: "future-trust" }]
+        }
+      }).protocols
+    ).toBeUndefined();
+  });
+
+  it("does not filter malformed descriptors with recognized protocol names", () => {
+    expect(
+      safeParseAgentServiceDocument({
+        ...serviceDocument,
+        protocols: { payments: [{ name: "mpp" }] }
+      }).success
+    ).toBe(false);
+  });
+});
+
+describe("Agent response compatibility", () => {
+  it("isolates unknown Service capabilities", () => {
+    expect(
+      normalizeAgentResponse(
+        {
+          operations: [
+            { authentication: "not-required", name: "list-offerings" },
+            { authentication: "not-required", name: "future-operation" },
+            { authentication: "not-required", name: "get-offering", future: true }
+          ],
+          mcp: [
+            { type: "streamable-http", url: "/mcp" },
+            { type: "future", url: "/future" },
+            { type: "streamable-http", url: "/future-member", future: true }
+          ],
+          branding: {
+            icon: { src: "/icon", type: "image/future" },
+            logo: { src: "/logo", type: "image/png", future: true },
+            future: {}
+          },
+          protocols: {
+            payments: [
+              {
+                authentication: "not-required",
+                name: "mpp",
+                options: ["inflow", "future"]
+              }
+            ]
+          },
+          search_capabilities: {
+            filters: {
+              inline: [
+                { type: "string", operators: ["eq"] },
+                { type: "future", operators: ["eq"] }
+              ]
+            },
+            sorts: {
+              inline: [
+                { keys: [{ direction: "ascending", missing: "last" }] },
+                { keys: [{ direction: "future", missing: "last" }] }
+              ]
+            }
+          }
+        },
+        "service-document"
+      )
+    ).toEqual({
+      operations: [{ authentication: "not-required", name: "list-offerings" }],
+      mcp: [{ type: "streamable-http", url: "/mcp" }],
+      branding: { logo: { src: "/logo", type: "image/png" } },
+      protocols: {
+        payments: [{ authentication: "not-required", name: "mpp", options: ["inflow"] }]
+      },
+      search_capabilities: {
+        filters: { inline: [{ type: "string", operators: ["eq"] }] },
+        sorts: { inline: [{ keys: [{ direction: "ascending", missing: "last" }] }] }
+      }
+    });
+  });
+
+  it("isolates unknown Offering capabilities", () => {
+    expect(
+      normalizeAgentResponse(
+        {
+          images: [
+            { src: "/image", type: "image/png", future: true },
+            { src: "/future", type: "image/future" }
+          ],
+          schema: { url: "/schema", future: true },
+          price: { type: "future" },
+          actions: [
+            {
+              authentication: "not-required",
+              http: { href: "/run", method: "POST" },
+              id: "run",
+              rel: "future"
+            },
+            {
+              authentication: "not-required",
+              http: { href: "/future", method: "PATCH" },
+              id: "future",
+              rel: "invoke"
+            },
+            {
+              authentication: "not-required",
+              http: { href: "/future-member", method: "POST", future: true },
+              id: "future-member",
+              rel: "invoke"
+            }
+          ]
+        },
+        "offering"
+      )
+    ).toEqual({
+      images: [{ src: "/image", type: "image/png" }],
+      actions: [
+        {
+          authentication: "not-required",
+          http: { href: "/run", method: "POST" },
+          id: "run",
+          rel: "future"
+        }
+      ]
+    });
+  });
+
+  it("normalizes pages and problems at the affected item boundary", () => {
+    expect(
+      normalizeAgentResponse(
+        { items: [{ images: [{ src: "/future", type: "image/future" }] }] },
+        "collection-page"
+      )
+    ).toEqual({ items: [{}] });
+    expect(
+      normalizeAgentResponse(
+        {
+          items: [
+            { type: "string", operators: ["eq"] },
+            { type: "string", operators: ["future"] }
+          ]
+        },
+        "filter-page"
+      )
+    ).toEqual({ items: [{ type: "string", operators: ["eq"] }] });
+    expect(
+      normalizeAgentResponse(
+        {
+          invalid_params: [
+            { in: "query", name: "limit", reason: "invalid" },
+            { in: "future", name: "future", reason: "invalid" }
+          ]
+        },
+        "problem"
+      )
+    ).toEqual({ invalid_params: [{ in: "query", name: "limit", reason: "invalid" }] });
   });
 });
 

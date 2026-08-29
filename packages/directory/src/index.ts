@@ -1,7 +1,7 @@
 export {};
 import {
   PAYMENT_OPTIONS,
-  parseServiceDocument,
+  parseAgentServiceDocument,
   type AuthenticationRequirement,
   type EnrollmentProtocol,
   type OdpOperation,
@@ -323,7 +323,7 @@ function parseService(value: unknown): DirectoryService {
   const url = new URL(serviceOrigin);
   if (url.protocol !== "https:" || url.origin !== serviceOrigin)
     throw new TypeError("Directory Service origin must be an HTTPS origin");
-  const document = parseServiceDocument({
+  const document = parseAgentServiceDocument({
     odp_version: "1.0",
     name: object["name"],
     description: object["description"],
@@ -342,8 +342,10 @@ function parseService(value: unknown): DirectoryService {
   });
   const indexedAt = requireText(object["indexed_at"], "indexed_at", 1, 64);
   if (Number.isNaN(Date.parse(indexedAt))) throw new TypeError("indexed_at must be a date-time");
+  const normalized = { ...object };
+  delete normalized["protocols"];
   return {
-    ...object,
+    ...normalized,
     service_origin: serviceOrigin,
     name: document.name,
     description: document.description,

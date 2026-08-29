@@ -2,7 +2,7 @@ import CachePolicy from "http-cache-semantics";
 
 import {
   deriveServiceOrigin,
-  parseServiceDocument,
+  parseAgentServiceDocument,
   type EnrollmentProtocol,
   type OperationDescriptor,
   type PaymentProtocol,
@@ -354,7 +354,7 @@ function parseDocument(bytes: Uint8Array): ServiceDocument {
     );
   }
   try {
-    return parseServiceDocument(value);
+    return parseAgentServiceDocument(value);
   } catch {
     throw new OdpInspectionError("ODP Service Document validation failed.", "validation_failed");
   }
@@ -401,7 +401,7 @@ function inspectionFrom(
 ): ServiceInspection {
   let document: ServiceDocument;
   try {
-    document = parseServiceDocument(structuredClone(value));
+    document = parseAgentServiceDocument(structuredClone(value));
   } catch {
     throw new OdpInspectionError(
       "Cached ODP Service Document validation failed.",

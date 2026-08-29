@@ -2,6 +2,9 @@
 
 Framework-neutral Service integration for the Offering Discovery Protocol.
 
+Service Documents are validated against the declared ODP version. Protocol advertisements accept
+only the enrollment, payment, and trust protocol names defined by that version.
+
 ## Install
 
 ```sh

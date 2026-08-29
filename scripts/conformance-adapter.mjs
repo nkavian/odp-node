@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 
 import { createInterface } from "node:readline";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   deriveServiceOrigin,
   isLocalResourceIdentifier,
+  normalizeAgentResponse,
   parseProblemResponse,
   resourceIdentitiesEqual,
   resolveContinuation,
   resolveResourceReference,
+  safeParseAgentServiceDocument,
   safeParseCollection,
   safeParseCollectionSearchRequest,
   safeParseFilterDefinition,
@@ -75,6 +78,8 @@ async function evaluateCase(subject, testCase, role) {
     case "collection-search-contract":
       if (testCase.operation !== "validate-request") return undefined;
       return safeParseCollectionSearchRequest(testCase.request).success === testCase.valid;
+    case "composition-contract":
+      return evaluateComposition(testCase, role);
     case "offering-search-contract":
       if (testCase.operation !== "validate-request") return undefined;
       return safeParseOfferingSearchRequest(testCase.request).success === testCase.valid;
@@ -97,6 +102,51 @@ async function evaluateCase(subject, testCase, role) {
     default:
       return undefined;
   }
+}
+
+function evaluateComposition(testCase, role) {
+  if (testCase.operation === "normalize-agent-response" && role === "agent") {
+    const normalized = normalizeAgentResponse(testCase.document, testCase.kind);
+    return (
+      agentResponseParses(normalized, testCase.kind) &&
+      isDeepStrictEqual(normalized, testCase.expected)
+    );
+  }
+  const document = {
+    odp_version: "1.0",
+    name: "Conformance Service",
+    description: "ODP Node conformance adapter",
+    language: "en",
+    localizations: ["en"],
+    operations: [
+      { authentication: "not-required", name: "list-offerings" },
+      { authentication: "not-required", name: "get-offering" }
+    ],
+    http: { endpoint_base: "/odp" },
+    protocols: testCase.protocols
+  };
+  if (testCase.operation === "validate-advertisement")
+    return safeParseServiceDocument(document).success === testCase.valid;
+  if (testCase.operation !== "filter-advertisement" || role !== "agent") return undefined;
+
+  const result = safeParseAgentServiceDocument(document);
+  return result.success && isDeepStrictEqual(result.data.protocols ?? {}, testCase.expected);
+}
+
+function agentResponseParses(value, kind) {
+  if (kind === "service-document") return safeParseAgentServiceDocument(value).success;
+  if (kind === "collection") return safeParseCollection(value).success;
+  if (kind === "offering") return safeParseOffering(value).success;
+  if (kind === "problem") return safeParseProblemDetails(value).success;
+  if (!safeParsePage(value).success || !Array.isArray(value.items)) return false;
+  if (kind === "collection-page")
+    return value.items.every((item) => safeParseCollection(item).success);
+  if (kind === "offering-page") return value.items.every((item) => safeParseOffering(item).success);
+  if (kind === "filter-page")
+    return value.items.every((item) => safeParseFilterDefinition(item).success);
+  if (kind === "sort-page")
+    return value.items.every((item) => safeParseSortDefinition(item).success);
+  return false;
 }
 
 async function evaluateAttributeSchema(testCase) {

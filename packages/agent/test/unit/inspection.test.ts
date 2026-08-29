@@ -60,6 +60,34 @@ describe("inspectService", () => {
     });
   });
 
+  it("filters unknown protocol descriptors before projecting capabilities", async () => {
+    const fetch = vi.fn(() =>
+      Promise.resolve(
+        odpResponse(
+          JSON.stringify({
+            ...document,
+            protocols: {
+              enrollment: [{ name: "future-enrollment" }, { name: "aep" }],
+              payments: [
+                { authentication: "not-required", name: "future-payment" },
+                { authentication: "required", name: "mpp" }
+              ],
+              trust: [{ name: "future-trust" }, { name: "tap" }]
+            }
+          })
+        )
+      )
+    );
+
+    const result = await inspectService({ serviceUrl: "https://example.com", fetch });
+
+    expect(result.capabilities).toMatchObject({
+      enrollment: [{ name: "aep" }],
+      payments: [{ authentication: "required", name: "mpp" }],
+      trust: [{ name: "tap" }]
+    });
+  });
+
   it("uses the four-hour fallback and partitions language variants", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00Z"));

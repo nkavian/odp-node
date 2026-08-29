@@ -3,6 +3,7 @@ import {
   parseCollection,
   parseCollectionSearchRequest,
   parseFilterDefinitionPage,
+  normalizeAgentResponse,
   parseOffering,
   parseOfferingSearchRequest,
   parseOfferingSearchResponse,
@@ -12,11 +13,13 @@ import {
   resolveResourceReference,
   type Collection,
   type CollectionSearchRequest,
+  type FilterDefinition,
   type Offering,
   type OfferingPage,
   type OfferingSearchRequest,
   type PageEnvelope,
   type Representation,
+  type SortDefinition,
   type TerseCollection,
   type TerseOffering
 } from "@offering-protocol/core";
@@ -44,6 +47,7 @@ export interface OdpServiceClientOptions extends Omit<
   "fallbackTtlMs" | "fetch" | "serviceUrl"
 > {
   serviceUrl: string | URL;
+  inspectionTransport?: OdpTransport;
   transport?: OdpTransport;
   supportingTransport?: OdpTransport;
   initialPageSize?: number;
@@ -206,6 +210,7 @@ export interface OdpServiceClient {
 
 export function createOdpServiceClient(options: OdpServiceClientOptions): OdpServiceClient {
   const transport = options.transport ?? createDefaultTransport(options.allowLocalNetwork);
+  const inspectionTransport = options.inspectionTransport ?? transport;
   const supportingTransport =
     options.supportingTransport ?? createDefaultTransport(options.allowLocalNetwork);
   const cache = options.cache ?? createInMemoryOdpCache();
@@ -229,7 +234,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     if (signal !== undefined)
       return inspectService({
         serviceUrl: options.serviceUrl,
-        fetch: transport,
+        fetch: inspectionTransport,
         ...(options.acceptLanguage === undefined ? {} : { acceptLanguage: options.acceptLanguage }),
         cache,
         fallbackTtlMs: fallbacks.serviceDocumentMs,
@@ -238,7 +243,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
       });
     inspectionFlight ??= inspectService({
       serviceUrl: options.serviceUrl,
-      fetch: transport,
+      fetch: inspectionTransport,
       ...(options.acceptLanguage === undefined ? {} : { acceptLanguage: options.acceptLanguage }),
       cache,
       fallbackTtlMs: fallbacks.serviceDocumentMs,
@@ -424,7 +429,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
       id
     );
     addRepresentation(url, request.representation);
-    const offering = parseOffering(
+    const offering = parseAgentOffering(
       await requestOdpValue(
         transport,
         url,
@@ -434,7 +439,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
         cachePartition,
         "offering",
         fallbacks.offeringMs,
-        parseOffering
+        parseAgentOffering
       )
     );
     requireOfferingRepresentation(offering, request.representation ?? "full");
@@ -532,9 +537,9 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
         cachePartition,
         "collection",
         fallbacks.collectionMs,
-        parseCollection
+        parseAgentCollection
       );
-      const collection = parseCollection(value);
+      const collection = parseAgentCollection(value);
       requireCollectionRepresentation(collection, request.representation ?? "full");
       requireResourceId(collection.id, id, "Collection");
       return collection;
@@ -612,7 +617,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
       ...(signal === undefined ? {} : { signal }),
       async loadPage(kind, href, pageSignal) {
         const url = resolveContinuation(href, inspected.serviceOrigin);
-        const parser = kind === "filters" ? parseFilterDefinitionPage : parseSortDefinitionPage;
+        const parser = kind === "filters" ? parseAgentFilterPage : parseAgentSortPage;
         return parser(
           await requestOdpValue(
             transport,
@@ -673,7 +678,7 @@ async function* collectionPages<Item>(
   const visited = new Set(continuation === undefined ? [] : [continuation]);
   let current = url;
   for (let count = 0; count < maximum; count += 1) {
-    const raw = parsePage(
+    const raw = parseAgentCollectionPage(
       await requestOdpValue(
         transport,
         current,
@@ -683,7 +688,7 @@ async function* collectionPages<Item>(
         cachePartition,
         operation === "search-collections" ? "search" : "collection",
         operation === "search-collections" ? fallbacks.searchMs : fallbacks.collectionMs,
-        parsePage
+        parseAgentCollectionPage
       )
     );
     requirePageSize(raw.items);
@@ -747,7 +752,8 @@ async function* offeringPages<Item>(
   const visited = new Set(continuation === undefined ? [] : [continuation]);
   let current = url;
   for (let count = 0; count < maximum; count += 1) {
-    const parser = operation === "search-offerings" ? parseOfferingSearchResponse : parsePage;
+    const parser =
+      operation === "search-offerings" ? parseAgentOfferingSearchResponse : parseAgentOfferingPage;
     const raw = parser(
       await requestOdpValue(
         transport,
@@ -816,6 +822,34 @@ function requireOperation(
   return inspection;
 }
 
+function parseAgentCollection(value: unknown): Collection {
+  return parseCollection(normalizeAgentResponse(value, "collection"));
+}
+
+function parseAgentOffering(value: unknown): Offering {
+  return parseOffering(normalizeAgentResponse(value, "offering"));
+}
+
+function parseAgentCollectionPage(value: unknown): PageEnvelope {
+  return parsePage(normalizeAgentResponse(value, "collection-page"));
+}
+
+function parseAgentOfferingPage(value: unknown): PageEnvelope {
+  return parsePage(normalizeAgentResponse(value, "offering-page"));
+}
+
+function parseAgentOfferingSearchResponse(value: unknown): OfferingPage {
+  return parseOfferingSearchResponse(normalizeAgentResponse(value, "offering-page"));
+}
+
+function parseAgentFilterPage(value: unknown): PageEnvelope<FilterDefinition> {
+  return parseFilterDefinitionPage(normalizeAgentResponse(value, "filter-page"));
+}
+
+function parseAgentSortPage(value: unknown): PageEnvelope<SortDefinition> {
+  return parseSortDefinitionPage(normalizeAgentResponse(value, "sort-page"));
+}
+
 function parseOfferingItem(value: unknown, version: "1.0", full: true): Offering;
 function parseOfferingItem(value: unknown, version: "1.0", full: false): TerseOffering;
 function parseOfferingItem(value: unknown, version: "1.0", full: boolean): Offering | TerseOffering;
@@ -824,8 +858,8 @@ function parseOfferingItem(
   version: "1.0",
   full: boolean
 ): Offering | TerseOffering {
-  if (typeof value !== "object" || value === null) return parseOffering(value);
-  const parsed = parseOffering({ odp_version: version, ...value });
+  if (typeof value !== "object" || value === null) return parseAgentOffering(value);
+  const parsed = parseAgentOffering({ odp_version: version, ...value });
   requireOfferingRepresentation(parsed, full ? "full" : "terse");
   if (full) return parsed;
   return structuredClone(value) as TerseOffering;
@@ -836,8 +870,8 @@ function parseCollectionItem(
   version: "1.0",
   full: boolean
 ): Collection | TerseCollection {
-  if (typeof value !== "object" || value === null) return parseCollection(value);
-  const parsed = parseCollection({ odp_version: version, ...value });
+  if (typeof value !== "object" || value === null) return parseAgentCollection(value);
+  const parsed = parseAgentCollection({ odp_version: version, ...value });
   requireCollectionRepresentation(parsed, full ? "full" : "terse");
   if (full) return parsed;
   return structuredClone(value) as TerseCollection;

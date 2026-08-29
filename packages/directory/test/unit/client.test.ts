@@ -133,6 +133,47 @@ describe("Directory client", () => {
     });
   });
 
+  it("filters unknown protocols from Directory results while preserving TAP", async () => {
+    const transport = vi.fn(() =>
+      Promise.resolve(
+        response({
+          items: [
+            {
+              ...service,
+              protocols: {
+                enrollment: [{ name: "future-enrollment" }],
+                payments: [
+                  { authentication: "not-required", name: "future-payment" },
+                  { authentication: "not-required", name: "mpp" }
+                ],
+                trust: [{ name: "future-trust" }, { name: "tap" }]
+              }
+            },
+            {
+              ...service,
+              service_origin: "https://future.example",
+              protocols: {
+                enrollment: [{ name: "future-enrollment" }],
+                payments: [{ authentication: "not-required", name: "future-payment" }],
+                trust: [{ name: "future-trust" }]
+              }
+            }
+          ]
+        })
+      )
+    );
+    const search = createDirectoryClient({ transport }).searchServices();
+
+    for await (const page of search.pages) {
+      expect(page.items[0]?.protocols).toEqual({
+        payments: [{ authentication: "not-required", name: "mpp" }],
+        trust: [{ name: "tap" }]
+      });
+      expect(page.items[1]?.protocols).toBeUndefined();
+      break;
+    }
+  });
+
   it("uses sandbox only when explicitly selected", async () => {
     let requestUrl = "";
     const transport = vi.fn((input: string | URL | Request) => {
