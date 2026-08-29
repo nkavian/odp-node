@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 
 import CachePolicy from "http-cache-semantics";
 
-import { parseProblemResponse, type ProblemDetails } from "@offering-protocol/core";
+import {
+  normalizeAgentResponse,
+  parseProblemResponse,
+  type ProblemDetails
+} from "@offering-protocol/core";
 
 import type { OdpCache, OdpCacheRecord, OdpCacheResourceClass } from "./cache.js";
 
@@ -263,7 +267,10 @@ async function send(
     let problem: ProblemDetails | undefined;
     if (response.headers.get("content-type")?.startsWith("application/problem+json") === true) {
       try {
-        problem = parseProblemResponse(await responseJson(response, 16_384), response.status);
+        problem = parseProblemResponse(
+          normalizeAgentResponse(await responseJson(response, 16_384), "problem"),
+          response.status
+        );
       } catch {
         problem = undefined;
       }

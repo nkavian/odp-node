@@ -15,6 +15,7 @@ npm install @offering-protocol/core
 import {
   OdpValidationError,
   createResourceIdentity,
+  parseAgentServiceDocument,
   parseOffering,
   safeParseServiceDocument
 } from "@offering-protocol/core";
@@ -30,6 +31,8 @@ try {
 } catch (error) {
   if (error instanceof OdpValidationError) report(error.issues);
 }
+
+const compatibleService = parseAgentServiceDocument(unknownServiceDocument);
 ```
 
 Each supported document has a throwing `parse*` function and a non-throwing `safeParse*` function.
@@ -40,6 +43,11 @@ allowed by the protocol.
 Invalid documents throw `OdpValidationError`. Its `issues` member identifies each invalid path and
 the corresponding validation message. Use the non-throwing functions when invalid peer input is an
 expected application outcome.
+
+Service authoring uses `parseServiceDocument` or `safeParseServiceDocument` and rejects protocol
+names outside the declared ODP version. Agent readers use `parseAgentServiceDocument` or
+`safeParseAgentServiceDocument`; these filter unrecognized enrollment, payment, and trust
+descriptors before validating every recognized descriptor.
 
 ## Resource Identity and References
 

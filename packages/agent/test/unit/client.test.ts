@@ -452,6 +452,21 @@ describe("ODP Service Collection client", () => {
 });
 
 describe("ODP Service Offering client", () => {
+  it("uses a distinct transport for Service inspection", async () => {
+    const inspectionTransport = transportFor(() => response(service));
+    const transport = transportFor(() => response({ odp_version: "1.0", id: "gpu", name: "GPU" }));
+    const odp = createOdpServiceClient({
+      inspectionTransport,
+      serviceUrl: "https://example.com",
+      transport
+    });
+
+    await odp.getOffering("gpu", { representation: "full" });
+
+    expect(inspectionTransport).toHaveBeenCalledOnce();
+    expect(transport).toHaveBeenCalledOnce();
+  });
+
   it("lists Offerings and follows opaque continuation links", async () => {
     const transport = transportFor((url) => {
       if (url.pathname === "/.well-known/odp") return response(service);

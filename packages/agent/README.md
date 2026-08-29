@@ -56,6 +56,9 @@ service.capabilities.payments;
 service.capabilities.trust;
 ```
 
+Inspection filters unrecognized enrollment, payment, and trust protocol descriptors for compatible
+ODP versions. Recognized descriptors remain subject to the complete Service Document contract.
+
 The agent package owns HTTP freshness, validation, conditional revalidation, redirect safety, and
 request coalescing. Responses without explicit freshness metadata receive a four-hour fallback.
 Explicit `Cache-Control` and `Expires` metadata takes precedence.

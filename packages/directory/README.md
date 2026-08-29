@@ -58,6 +58,9 @@ Every result contains the Service origin, cached Service Document metadata, and 
 records when that directory entry was refreshed. The agent should inspect the live Service before
 navigating its Collections or Offerings.
 
+Compatible results may advertise protocol names unknown to this package. The client filters those
+descriptors and preserves recognized enrollment, payment, and trust descriptors, including TAP.
+
 ## Suggestions
 
 `suggestServices` returns bounded lexical suggestions for a prefix. Natural-language interpretation
