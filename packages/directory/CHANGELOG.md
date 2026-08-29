@@ -1,5 +1,14 @@
 # @offering-protocol/directory
 
+## 0.2.5
+
+### Patch Changes
+
+- [#44](https://github.com/offering-protocol/odp-node/pull/44) [`34d50e2`](https://github.com/offering-protocol/odp-node/commit/34d50e2a55f4d9559a97aab95ffebf91af3b2e75) Thanks [@nkavian](https://github.com/nkavian)! - Keep Service authoring strict while Agent readers isolate unrecognized optional capabilities, unsafe Action extensions, and unsupported protocol descriptors.
+
+- Updated dependencies [[`34d50e2`](https://github.com/offering-protocol/odp-node/commit/34d50e2a55f4d9559a97aab95ffebf91af3b2e75), [`2ffd265`](https://github.com/offering-protocol/odp-node/commit/2ffd2656b82c641b0363d9b795c227a61e788e7a), [`2ffd265`](https://github.com/offering-protocol/odp-node/commit/2ffd2656b82c641b0363d9b795c227a61e788e7a)]:
+  - @offering-protocol/core@0.3.6
+
 ## 0.2.4
 
 ### Patch Changes

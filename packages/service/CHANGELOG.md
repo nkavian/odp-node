@@ -1,5 +1,14 @@
 # @offering-protocol/service
 
+## 0.3.3
+
+### Patch Changes
+
+- [#41](https://github.com/offering-protocol/odp-node/pull/41) [`2ffd265`](https://github.com/offering-protocol/odp-node/commit/2ffd2656b82c641b0363d9b795c227a61e788e7a) Thanks [@nkavian](https://github.com/nkavian)! - Enforce page, representation, schema-resolution, and secure default transport boundaries across Agent and Service workflows.
+
+- Updated dependencies [[`34d50e2`](https://github.com/offering-protocol/odp-node/commit/34d50e2a55f4d9559a97aab95ffebf91af3b2e75), [`2ffd265`](https://github.com/offering-protocol/odp-node/commit/2ffd2656b82c641b0363d9b795c227a61e788e7a), [`2ffd265`](https://github.com/offering-protocol/odp-node/commit/2ffd2656b82c641b0363d9b795c227a61e788e7a)]:
+  - @offering-protocol/core@0.3.6
+
 ## 0.3.2
 
 ### Patch Changes
