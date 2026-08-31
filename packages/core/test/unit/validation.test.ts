@@ -526,4 +526,16 @@ describe("Problem Details validation", () => {
     expect(parseProblemResponse(problem, 400)).toEqual(problem);
     expect(() => parseProblemResponse(problem, 422)).toThrow(OdpValidationError);
   });
+
+  it("requires title and matching problem type", () => {
+    expect(() => parseProblemResponse({ ...problem, title: undefined }, 400)).toThrow(
+      OdpValidationError
+    );
+    expect(() =>
+      parseProblemResponse(
+        { ...problem, type: "https://offeringprotocol.org/problems/not-found" },
+        400
+      )
+    ).toThrow(OdpValidationError);
+  });
 });
