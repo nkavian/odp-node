@@ -156,6 +156,20 @@ function representationIssues(value: {
   return issues;
 }
 
+function problemDetailsIssues(value: ProblemDetails): ValidationIssue[] {
+  const expectedType = `https://offeringprotocol.org/problems/${value.code.toLowerCase().replaceAll("_", "-")}`;
+  return value.type === expectedType
+    ? []
+    : [
+        {
+          path: "/type",
+          keyword: "problem-type",
+          message: "must correspond to the problem code",
+          params: { expectedType }
+        }
+      ];
+}
+
 function filterDefinitionIssues(value: FilterDefinition): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   const comparisonOperators = new Set(["gt", "gte", "lt", "lte"]);
@@ -598,7 +612,8 @@ const offering = validator<Offering>(
 );
 const problemDetails = validator<ProblemDetails>(
   "https://offeringprotocol.org/schemas/problem-details.schema.json",
-  "Problem Details"
+  "Problem Details",
+  problemDetailsIssues
 );
 const resourceIdentity = validator<ResourceIdentity>(
   "https://offeringprotocol.org/schemas/resource-identity.schema.json",
