@@ -1,5 +1,11 @@
 # @offering-protocol/agent
 
+## 0.4.1
+
+### Patch Changes
+
+- [#47](https://github.com/offering-protocol/odp-node/pull/47) [`4ee9807`](https://github.com/offering-protocol/odp-node/commit/4ee9807483e40c9fe2b45e4c8c6a2ac11cb4b1ae) Thanks [@nkavian](https://github.com/nkavian)! - Update schema resolution dependencies to their latest compatible releases.
+
 ## 0.4.0
 
 ### Minor Changes
