@@ -15,6 +15,17 @@ surface of every package. Scope an individual task with a Turbo filter when iter
 pnpm turbo run typecheck --filter=@offering-protocol/core
 ```
 
+## Dependency updates
+
+Refresh dependencies throughout the workspace to the newest versions allowed by their declared
+ranges:
+
+```sh
+pnpm update:all
+```
+
+Review the manifest and lockfile changes, then run `pnpm verify` before committing them.
+
 ## Conformance
 
 Build the packages and run the language-neutral harness from a sibling `odp-specs` checkout:
