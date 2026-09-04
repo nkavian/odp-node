@@ -12,10 +12,10 @@
     "@inflowpayai/x402-seller": "^0.6.2",
     "@offering-protocol/examples-shared": "workspace:^",
     "@offering-protocol/service": "workspace:^",
-    "@x402/express": "^2.12.0",
-    "express": "^5.0.0"
+    "@x402/express": "^2.24.0",
+    "express": "^5.2.1"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0"
+    "@types/express": "^5.0.6"
   }
 }

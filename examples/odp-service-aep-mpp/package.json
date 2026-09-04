@@ -9,16 +9,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aep-foundation/core": "^0.2.0",
-    "@aep-foundation/express": "^0.2.0",
-    "@aep-foundation/service": "^0.2.0",
+    "@aep-foundation/core": "^0.5.1",
+    "@aep-foundation/express": "^0.2.3",
+    "@aep-foundation/service": "^0.3.3",
     "@inflowpayai/mpp-seller": "^0.6.2",
     "@offering-protocol/examples-shared": "workspace:^",
     "@offering-protocol/service": "workspace:^",
-    "express": "^5.0.0",
-    "mppx": "^0.8.12"
+    "express": "^5.2.1",
+    "mppx": "^0.8.19"
   },
   "devDependencies": {
-    "@types/express": "^5.0.0"
+    "@types/express": "^5.0.6"
   }
 }
