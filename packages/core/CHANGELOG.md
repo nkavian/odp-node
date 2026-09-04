@@ -1,5 +1,11 @@
 # @offering-protocol/core
 
+## 0.3.7
+
+### Patch Changes
+
+- [#45](https://github.com/offering-protocol/odp-node/pull/45) [`a25cccc`](https://github.com/offering-protocol/odp-node/commit/a25cccc8263f294e436d0752ec7301123d0f0c9b) Thanks [@nkavian](https://github.com/nkavian)! - Require Problem Details type URLs to correspond to their machine-readable codes.
+
 ## 0.3.6
 
 ### Patch Changes
