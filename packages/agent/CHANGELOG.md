@@ -1,5 +1,11 @@
 # @offering-protocol/agent
 
+## 0.4.2
+
+### Patch Changes
+
+- [#49](https://github.com/offering-protocol/odp-node/pull/49) [`2106032`](https://github.com/offering-protocol/odp-node/commit/210603273b4ef7f1a4f156148a7633bb7656d85e) Thanks [@nkavian](https://github.com/nkavian)! - Support Node.js connection attempts that request all validated DNS addresses.
+
 ## 0.4.1
 
 ### Patch Changes
