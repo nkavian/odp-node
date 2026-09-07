@@ -16,7 +16,7 @@
   "scripts": {
     "build": "turbo run build",
     "benchmark": "pnpm build && node scripts/benchmark.mjs",
-    "test": "turbo run test",
+    "test": "node --test scripts/*.test.mjs && turbo run test",
     "update:all": "pnpm update --recursive --depth Infinity",
     "coverage:changed": "node scripts/check-changed-coverage.mjs",
     "lint": "turbo run lint",
