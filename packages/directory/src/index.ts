@@ -8,7 +8,8 @@ import {
   type OperationDescriptor,
   type PaymentProtocol,
   type PaymentOption,
-  type ServiceProtocols
+  type ServiceProtocols,
+  type TrustProtocol
 } from "@offering-protocol/core";
 
 export const DIRECTORY_ORIGINS = Object.freeze({
@@ -36,6 +37,7 @@ export interface DirectoryServiceFilters {
     name: PaymentProtocol["name"];
     options?: PaymentOption[];
   }>;
+  trust?: TrustProtocol[];
 }
 
 export interface DirectorySearchRequest {
@@ -82,6 +84,7 @@ export interface DirectoryFacets {
   operations?: DirectoryFacet<OperationDescriptor>[];
   payments?: DirectoryFacet<PaymentProtocol>[];
   payment_options?: DirectoryFacet<DirectoryPaymentOptionFacetValue>[];
+  trust?: DirectoryFacet<TrustProtocol>[];
 }
 
 export interface DirectorySearchPage extends Record<string, unknown> {
@@ -298,7 +301,8 @@ function validateFilters(filters: DirectoryServiceFilters): DirectoryServiceFilt
       : {
           operations: parseOperationFilters(filters.operations)
         }),
-    ...(filters.payments === undefined ? {} : { payments: parsePaymentFilters(filters.payments) })
+    ...(filters.payments === undefined ? {} : { payments: parsePaymentFilters(filters.payments) }),
+    ...(filters.trust === undefined ? {} : { trust: parseTrustFilters(filters.trust) })
   };
 }
 
@@ -389,7 +393,10 @@ function parseFacets(value: unknown): DirectoryFacets {
       ? {}
       : {
           operations: parseDescriptorFacet(object["operations"], "operations", parseOperation)
-        })
+        }),
+    ...(object["trust"] === undefined
+      ? {}
+      : { trust: parseDescriptorFacet(object["trust"], "trust", parseTrust) })
   };
 }
 
@@ -453,11 +460,22 @@ function parsePaymentFilters(value: unknown): NonNullable<DirectoryServiceFilter
   );
 }
 
+function parseTrustFilters(value: unknown): NonNullable<DirectoryServiceFilters["trust"]> {
+  return uniqueDescriptors(value, "trust", 1, parseTrust, ({ name }) => name);
+}
+
 function parseEnrollment(value: unknown): EnrollmentProtocol {
   const object = requireObject(value, "enrollment descriptor");
   if (Object.keys(object).length !== 1 || object["name"] !== "aep")
     throw new TypeError("enrollment descriptor is invalid");
   return { name: "aep" };
+}
+
+function parseTrust(value: unknown): TrustProtocol {
+  const object = requireObject(value, "trust descriptor");
+  if (Object.keys(object).length !== 1 || object["name"] !== "tap")
+    throw new TypeError("trust descriptor is invalid");
+  return { name: "tap" };
 }
 
 function parseOperation(value: unknown): OperationDescriptor {

@@ -43,8 +43,9 @@ for await (const service of results.items) {
 
 Options within one payment filter are alternatives. The example matches Services that accept either
 InFlow or Solana through MPP. A protocol-only `{ name: "mpp" }` filter matches any Service that
-advertises MPP. Responses keep protocol counts in `facets.payments` and expose singular
-protocol-option counts in `facets.payment_options`.
+advertises MPP. Responses keep protocol counts in `facets.payments`, expose singular
+protocol-option counts in `facets.payment_options`, and report trust protocol counts in
+`facets.trust`.
 
 `items` and `pages` are independent lazy traversals. Each begins with `POST /v1/services/search` and
 retrieves opaque continuation links with `GET`. Continuations and redirects must remain on the
