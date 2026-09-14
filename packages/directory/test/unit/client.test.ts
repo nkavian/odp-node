@@ -185,7 +185,6 @@ describe("Directory client", () => {
     expect(() => client.searchServices({ filters: { trust: [] } })).toThrow(
       "trust filters are invalid"
     );
-
     const malformed = createDirectoryClient({
       transport: vi.fn(() =>
         Promise.resolve(
@@ -196,6 +195,20 @@ describe("Directory client", () => {
     await expect(malformed.searchServices().pages[Symbol.asyncIterator]().next()).rejects.toThrow(
       "trust descriptor is invalid"
     );
+
+    const malformedFields = createDirectoryClient({
+      transport: vi.fn(() =>
+        Promise.resolve(
+          response({
+            items: [],
+            facets: { trust: [{ value: { name: "tap", extension: true }, count: 1 }] }
+          })
+        )
+      )
+    });
+    await expect(
+      malformedFields.searchServices().pages[Symbol.asyncIterator]().next()
+    ).rejects.toThrow("trust descriptor is invalid");
   });
 
   it("uses sandbox only when explicitly selected", async () => {
