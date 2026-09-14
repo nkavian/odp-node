@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@aep-foundation/core": "^0.5.1",
-    "@aep-foundation/express": "^0.2.3",
-    "@aep-foundation/service": "^0.3.3",
+    "@aep-foundation/express": "^0.2.4",
+    "@aep-foundation/service": "^0.3.4",
     "@inflowpayai/mpp-seller": "^0.6.2",
     "@offering-protocol/examples-shared": "workspace:^",
     "@offering-protocol/service": "workspace:^",
