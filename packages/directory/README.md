@@ -21,7 +21,7 @@ A fetch-compatible `transport` can be injected for testing without changing the 
 Directory search covers cached Service metadata, not Service catalogs. Filter values within one
 category use OR semantics; different categories combine with AND semantics. The initial page can
 include facets for keywords, enrollment protocols, payment protocols, individual protocol payment
-options, and ODP operation descriptors.
+options, trust protocols, and ODP operation descriptors.
 
 ```ts
 import { createDirectoryClient } from "@offering-protocol/directory";
@@ -31,7 +31,8 @@ const results = directory.searchServices({
   query: "GPU compute",
   filters: {
     keywords: ["gpu", "accelerator"],
-    payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }]
+    payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }],
+    trust: [{ name: "tap" }]
   },
   limit: 25
 });
@@ -43,8 +44,9 @@ for await (const service of results.items) {
 
 Options within one payment filter are alternatives. The example matches Services that accept either
 InFlow or Solana through MPP. A protocol-only `{ name: "mpp" }` filter matches any Service that
-advertises MPP. Responses keep protocol counts in `facets.payments` and expose singular
-protocol-option counts in `facets.payment_options`.
+advertises MPP. Responses keep protocol counts in `facets.payments`, expose singular
+protocol-option counts in `facets.payment_options`, and report trust protocol counts in
+`facets.trust`. A `{ name: "tap" }` trust filter restricts results to Services that advertise TAP.
 
 `items` and `pages` are independent lazy traversals. Each begins with `POST /v1/services/search` and
 retrieves opaque continuation links with `GET`. Continuations and redirects must remain on the

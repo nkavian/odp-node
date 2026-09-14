@@ -67,7 +67,8 @@ describe("Directory client", () => {
             payment_options: [
               { value: { name: "mpp", option: "inflow" }, count: 1 },
               { value: { name: "mpp", option: "solana" }, count: 1 }
-            ]
+            ],
+            trust: [{ value: { name: "tap" }, count: 1 }]
           }
         })
       );
@@ -78,7 +79,8 @@ describe("Directory client", () => {
         enrollment: [{ name: "aep" }],
         keywords: ["gpu", "accelerator"],
         operations: [{ authentication: "not-required", name: "list-offerings" }],
-        payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }]
+        payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }],
+        trust: [{ name: "tap" }]
       },
       limit: 25
     });
@@ -96,7 +98,8 @@ describe("Directory client", () => {
         enrollment: [{ name: "aep" }],
         keywords: ["gpu", "accelerator"],
         operations: [{ authentication: "not-required", name: "list-offerings" }],
-        payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }]
+        payments: [{ authentication: "not-required", name: "mpp", options: ["inflow", "solana"] }],
+        trust: [{ name: "tap" }]
       },
       limit: 25
     });
@@ -129,7 +132,8 @@ describe("Directory client", () => {
       payment_options: [
         { value: { name: "mpp", option: "inflow" }, count: 1 },
         { value: { name: "mpp", option: "solana" }, count: 1 }
-      ]
+      ],
+      trust: [{ value: { name: "tap" }, count: 1 }]
     });
   });
 
@@ -172,6 +176,39 @@ describe("Directory client", () => {
       expect(page.items[1]?.protocols).toBeUndefined();
       break;
     }
+  });
+
+  it("rejects unsupported trust filters and malformed trust facets", async () => {
+    const client = createDirectoryClient({
+      transport: vi.fn(() => Promise.resolve(response({ items: [] })))
+    });
+    expect(() => client.searchServices({ filters: { trust: [] } })).toThrow(
+      "trust filters are invalid"
+    );
+    const malformed = createDirectoryClient({
+      transport: vi.fn(() =>
+        Promise.resolve(
+          response({ items: [], facets: { trust: [{ value: { name: "mpp" }, count: 1 }] } })
+        )
+      )
+    });
+    await expect(malformed.searchServices().pages[Symbol.asyncIterator]().next()).rejects.toThrow(
+      "trust descriptor is invalid"
+    );
+
+    const malformedFields = createDirectoryClient({
+      transport: vi.fn(() =>
+        Promise.resolve(
+          response({
+            items: [],
+            facets: { trust: [{ value: { name: "tap", extension: true }, count: 1 }] }
+          })
+        )
+      )
+    });
+    await expect(
+      malformedFields.searchServices().pages[Symbol.asyncIterator]().next()
+    ).rejects.toThrow("trust descriptor is invalid");
   });
 
   it("uses sandbox only when explicitly selected", async () => {
