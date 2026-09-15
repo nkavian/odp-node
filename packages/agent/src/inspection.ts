@@ -41,6 +41,11 @@ export interface InspectServiceOptions {
   serviceUrl: string | URL;
   acceptLanguage?: string;
   cache?: OdpCache;
+  /**
+   * Isolates cached Service Documents by authentication context. Two clients reaching one Service
+   * with different credentials must not share a cache entry (CCH-05, CCH-06).
+   */
+  cachePartition?: string;
   fallbackTtlMs?: number;
   fetch?: OdpTransport;
   allowLocalNetwork?: boolean;
@@ -50,6 +55,7 @@ export interface InspectServiceOptions {
 
 export type OdpInspectionErrorCode =
   | "aborted"
+  | "blocked_destination"
   | "http_error"
   | "invalid_json"
   | "invalid_media_type"
@@ -61,8 +67,8 @@ export class OdpInspectionError extends Error {
   readonly code: OdpInspectionErrorCode;
   readonly status?: number;
 
-  constructor(message: string, code: OdpInspectionErrorCode, status?: number) {
-    super(message);
+  constructor(message: string, code: OdpInspectionErrorCode, status?: number, cause?: unknown) {
+    super(message, cause === undefined ? undefined : { cause });
     this.name = "OdpInspectionError";
     this.code = code;
     if (status !== undefined) this.status = status;
@@ -70,6 +76,49 @@ export class OdpInspectionError extends Error {
 }
 
 const flights = new WeakMap<OdpCache, Map<string, Promise<ServiceInspection>>>();
+const transportIds = new WeakMap<OdpTransport, string>();
+let nextTransportId = 0;
+
+function transportIdentity(transport: OdpTransport | undefined): string {
+  if (transport === undefined) return "default";
+  const existing = transportIds.get(transport);
+  if (existing !== undefined) return existing;
+  nextTransportId += 1;
+  const assigned = `t${String(nextTransportId)}`;
+  transportIds.set(transport, assigned);
+  return assigned;
+}
+
+/**
+ * Two calls share an in-flight inspection only when every input that can change the outcome is
+ * identical. The transport is part of that: a caller-supplied one carries its own credentials,
+ * destination policy and redirect behaviour.
+ */
+function flightKey(options: InspectServiceOptions, requestedUrl: URL): string {
+  return [
+    String(requestedUrl),
+    options.acceptLanguage ?? "",
+    options.cachePartition ?? "",
+    transportIdentity(options.fetch),
+    String(options.allowLocalNetwork ?? false),
+    String(options.maxRedirects ?? 5)
+  ].join("\u0000");
+}
+
+function cloneInspection(inspection: ServiceInspection): ServiceInspection {
+  return {
+    ...inspection,
+    document: structuredClone(inspection.document),
+    requestedUrl: new URL(String(inspection.requestedUrl)),
+    finalUrl: new URL(String(inspection.finalUrl)),
+    capabilities: {
+      enrollment: [...inspection.capabilities.enrollment],
+      operations: [...inspection.capabilities.operations],
+      payments: [...inspection.capabilities.payments],
+      trust: [...inspection.capabilities.trust]
+    }
+  };
+}
 
 export async function inspectService(options: InspectServiceOptions): Promise<ServiceInspection> {
   const serviceOrigin = deriveServiceOrigin(options.serviceUrl);
@@ -78,16 +127,18 @@ export async function inspectService(options: InspectServiceOptions): Promise<Se
   if (cache === undefined || options.signal !== undefined)
     return fetchInspection(options, requestedUrl, serviceOrigin);
 
-  const key = `${String(requestedUrl)}\u0000${options.acceptLanguage ?? ""}`;
+  const key = flightKey(options, requestedUrl);
   const active = flights.get(cache) ?? new Map<string, Promise<ServiceInspection>>();
   flights.set(cache, active);
   const existing = active.get(key);
-  if (existing !== undefined) return existing;
+  // Each caller gets its own object: `capabilities` exposes live arrays that one caller must not be
+  // able to mutate out from under another.
+  if (existing !== undefined) return cloneInspection(await existing);
   const flight = fetchInspection(options, requestedUrl, serviceOrigin).finally(() =>
     active.delete(key)
   );
   active.set(key, flight);
-  return flight;
+  return cloneInspection(await flight);
 }
 
 async function fetchInspection(
@@ -96,12 +147,20 @@ async function fetchInspection(
   serviceOrigin: string
 ): Promise<ServiceInspection> {
   const requestHeaders = requestHeaderRecord(options.acceptLanguage);
-  const key = cacheKey(requestedUrl, options.acceptLanguage);
+  const key = cacheKey(requestedUrl, options.acceptLanguage, options.cachePartition);
   let cached = await options.cache?.get("service-document", key);
   let cachePolicy = cached === undefined ? undefined : restorePolicy(cached);
   if (cached !== undefined && cachePolicy === undefined) {
     await options.cache?.delete("service-document", key);
     cached = undefined;
+  }
+  // SEC-16 / SVC-87: `finalUrl` comes out of a cache the caller supplies and may be persistent or
+  // shared. Never fetch it without re-checking that it is still on the Service Origin — otherwise a
+  // poisoned or stale record repoints every future inspection at an attacker-chosen URL.
+  if (cached !== undefined && !isServiceOriginUrl(cached.finalUrl, serviceOrigin)) {
+    await options.cache?.delete("service-document", key);
+    cached = undefined;
+    cachePolicy = undefined;
   }
   const policyRequest = {
     url: cached?.finalUrl ?? String(requestedUrl),
@@ -146,7 +205,11 @@ async function fetchInspection(
       revalidationRequest,
       responseMetadata(response.response)
     );
-    if (revalidated.modified) {
+    // `revalidatedPolicy().modified` is `status !== 304`, so it is always false here. `matches` is
+    // the meaningful field, but it is only conclusive when the 304 carried a validator of its own;
+    // a bare 304 is legitimate and must still be honoured.
+    if (suppliesValidator(response.response) && !revalidated.matches) {
+      await options.cache?.delete("service-document", key);
       throw new OdpInspectionError(
         "ODP Service Document returned an unusable revalidation response.",
         "http_error",
@@ -246,10 +309,52 @@ async function fetchWithRedirects(
     }
   } catch (error) {
     if (error instanceof OdpInspectionError) throw error;
-    if (options.signal?.aborted === true) {
-      throw new OdpInspectionError("ODP Service Document request was aborted.", "aborted");
-    }
-    throw new OdpInspectionError("ODP Service Document could not be fetched.", "http_error");
+    if (isAbortError(error))
+      throw new OdpInspectionError(
+        "ODP Service Document request was aborted.",
+        "aborted",
+        undefined,
+        error
+      );
+    // A destination-policy rejection is not the same as a connection failure, and the reason has to
+    // survive: the transport is where the SSRF and transport-security guards live.
+    if (error instanceof TypeError || error instanceof RangeError)
+      throw new OdpInspectionError(
+        `ODP Service Document request was rejected: ${error.message}`,
+        "blocked_destination",
+        undefined,
+        error
+      );
+    if (options.signal?.aborted === true)
+      throw new OdpInspectionError(
+        "ODP Service Document request was aborted.",
+        "aborted",
+        undefined,
+        error
+      );
+    throw new OdpInspectionError(
+      "ODP Service Document could not be fetched.",
+      "http_error",
+      undefined,
+      error
+    );
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
+
+/** True when a 304 carried a validator of its own, making a `matches` result conclusive. */
+function suppliesValidator(response: Response): boolean {
+  return response.headers.get("etag") !== null || response.headers.get("last-modified") !== null;
+}
+
+function isServiceOriginUrl(value: string, serviceOrigin: string): boolean {
+  try {
+    return new URL(value).origin === serviceOrigin;
+  } catch {
+    return false;
   }
 }
 
@@ -260,8 +365,8 @@ function requestHeaderRecord(acceptLanguage?: string): CachePolicy.Headers {
   };
 }
 
-function cacheKey(url: URL, acceptLanguage?: string): string {
-  return `${String(url)}\u0000${acceptLanguage ?? ""}`;
+function cacheKey(url: URL, acceptLanguage?: string, cachePartition?: string): string {
+  return `${cachePartition ?? "public"}\u0000${String(url)}\u0000${acceptLanguage ?? ""}`;
 }
 
 function headersForFetch(headers: CachePolicy.Headers): Headers {
@@ -360,16 +465,25 @@ function parseDocument(bytes: Uint8Array): ServiceDocument {
   }
 }
 
+/**
+ * Container nesting measured from the top-level value (ERR-18): `{}` and `{"a":1}` are both depth 1,
+ * `{"a":{"b":1}}` is depth 2. A scalar is a value held by a container, not a level of its own —
+ * counting it made the effective Service Document limit 7 containers rather than 8 (SVC-83).
+ */
 function nestingDepth(value: unknown): number {
-  let maximum = 1;
-  const pending: Array<{ depth: number; value: unknown }> = [{ depth: 1, value }];
+  if (typeof value !== "object" || value === null) return 0;
+  let maximum = 0;
+  const pending: Array<{ depth: number; value: object }> = [{ depth: 1, value }];
   while (pending.length > 0) {
     const current = pending.pop();
     if (current === undefined) break;
     maximum = Math.max(maximum, current.depth);
-    if (typeof current.value !== "object" || current.value === null) continue;
-    const children = Array.isArray(current.value) ? current.value : Object.values(current.value);
-    children.forEach((child) => pending.push({ depth: current.depth + 1, value: child }));
+    const children = Array.isArray(current.value)
+      ? (current.value as unknown[])
+      : Object.values(current.value as Record<string, unknown>);
+    for (const child of children)
+      if (typeof child === "object" && child !== null)
+        pending.push({ depth: current.depth + 1, value: child });
   }
   return maximum;
 }

@@ -71,12 +71,28 @@ export interface ResolvedOpenApiAction {
 
 export type ResolvedAction = ResolvedHttpAction | ResolvedOpenApiAction;
 
+/** OFR-57: an Offering contains at most 16 Actions. */
+const MAXIMUM_ACTIONS = 16;
+/** OFR-59: a lower-case token of at most 64 characters — letters and digits with internal hyphens. */
+const RELATION = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+
 export function normalizeActions(
   actions: OfferingAction[] | undefined,
   serviceOrigin: string,
   serviceOpenApiUrl?: string
 ): { actions?: DiscoveredAction[]; issues: OfferingIssue[] } {
   if (actions === undefined) return { issues: [] };
+  if (actions.length > MAXIMUM_ACTIONS)
+    // The list as a whole breaks its contract, so the smallest capability that depends on it — the
+    // Action list — becomes unusable and the rest of the Offering stays intact (EXT-03).
+    return {
+      issues: [
+        {
+          scope: "action",
+          message: `Offering advertises ${String(actions.length)} Actions, more than the limit of 16`
+        }
+      ]
+    };
   const duplicates = duplicateIds(actions);
   const issues = [...duplicates].map((id) => ({
     scope: "action" as const,
@@ -87,6 +103,8 @@ export function normalizeActions(
   for (const action of actions) {
     if (duplicates.has(action.id)) continue;
     try {
+      if (action.rel.length > 64 || !RELATION.test(action.rel))
+        throw new TypeError(`Action relation ${action.rel} is not a valid ODP relation token`);
       const common = {
         authentication: action.authentication,
         id: action.id,

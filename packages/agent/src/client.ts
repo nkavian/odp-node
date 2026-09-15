@@ -219,6 +219,10 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
   const catalogCache =
     options.transport === undefined || options.cachePartition !== undefined ? cache : undefined;
   const cachePartition = options.cachePartition ?? "public";
+  // When the shared cache is disabled — a caller-supplied transport with no declared partition,
+  // whose authentication context this client cannot know — the Service Document still gets a cache,
+  // but a private one, so it is reused without ever being visible to another client (CCH-05).
+  const inspectionCache = catalogCache ?? createInMemoryOdpCache();
   const fallbacks = {
     serviceDocumentMs: options.cacheFallbacks?.serviceDocumentMs ?? 14_400_000,
     collectionMs: options.cacheFallbacks?.collectionMs ?? 3_600_000,
@@ -229,26 +233,36 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
   for (const [name, value] of Object.entries(fallbacks)) requireFallback(value, name);
   const initialPageSize = options.initialPageSize ?? 50;
   requireLimit(initialPageSize, "initialPageSize");
+  // `signal` is inherited from InspectServiceOptions and used to apply to inspection alone, which
+  // silently ignored it for every catalog, schema and OpenAPI request.
+  const scoped = (signal?: AbortSignal): AbortSignal | undefined => {
+    if (options.signal === undefined) return signal;
+    if (signal === undefined) return options.signal;
+    return AbortSignal.any([options.signal, signal]);
+  };
   let inspectionFlight: Promise<ServiceInspection> | undefined;
   const inspect = (signal?: AbortSignal): Promise<ServiceInspection> => {
-    if (signal !== undefined)
-      return inspectService({
-        serviceUrl: options.serviceUrl,
-        fetch: inspectionTransport,
-        ...(options.acceptLanguage === undefined ? {} : { acceptLanguage: options.acceptLanguage }),
-        cache,
-        fallbackTtlMs: fallbacks.serviceDocumentMs,
-        ...(options.maxRedirects === undefined ? {} : { maxRedirects: options.maxRedirects }),
-        signal: options.signal === undefined ? signal : AbortSignal.any([options.signal, signal])
-      });
-    inspectionFlight ??= inspectService({
+    // The Service Document used to be cached under the unpartitioned `cache` even when the
+    // catalog cache was deliberately disabled, so an authenticated document could be read back by
+    // an anonymous client sharing the cache (CCH-05, CCH-06).
+    const base = {
       serviceUrl: options.serviceUrl,
       fetch: inspectionTransport,
       ...(options.acceptLanguage === undefined ? {} : { acceptLanguage: options.acceptLanguage }),
-      cache,
+      cache: inspectionCache,
+      cachePartition,
       fallbackTtlMs: fallbacks.serviceDocumentMs,
-      ...(options.maxRedirects === undefined ? {} : { maxRedirects: options.maxRedirects }),
-      ...(options.signal === undefined ? {} : { signal: options.signal })
+      ...(options.maxRedirects === undefined ? {} : { maxRedirects: options.maxRedirects })
+    };
+    const combined = scoped(signal);
+    if (signal !== undefined)
+      return inspectService({
+        ...base,
+        ...(combined === undefined ? {} : { signal: combined })
+      });
+    inspectionFlight ??= inspectService({
+      ...base,
+      ...(combined === undefined ? {} : { signal: combined })
     }).finally(() => {
       inspectionFlight = undefined;
     });
@@ -257,10 +271,11 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
 
   const sequence = <Item>(
     operation: "list-collections" | "search-collections",
-    request: CollectionListOptions | CollectionSearchOptions,
+    input: CollectionListOptions | CollectionSearchOptions,
     body?: CollectionSearchRequest,
     next?: string
   ): CollectionSequence<Item> => {
+    const request = withScopedSignal(input, scoped(input.signal));
     const pages = (): AsyncGenerator<PageEnvelope<Item>> =>
       collectionPages<Item>(
         inspect,
@@ -283,11 +298,12 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
 
   const offeringSequence = <Item>(
     operation: "list-offerings" | "list-collection-offerings" | "search-offerings",
-    request: OfferingListOptions | OfferingSearchOptions,
+    input: OfferingListOptions | OfferingSearchOptions,
     collectionId?: string,
     body?: OfferingSearchRequest,
     next?: string
   ): CollectionSequence<Item> => {
+    const request = withScopedSignal(input, scoped(input.signal));
     const pages = (): AsyncGenerator<OfferingPage<Item>> =>
       offeringPages<Item>(
         inspect,
@@ -400,6 +416,36 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
       : offeringSequence<TerseOffering>("search-offerings", request, undefined, undefined, next);
   }
 
+  async function getCollection(
+    id: string,
+    request: CollectionGetOptions = {}
+  ): Promise<Collection> {
+    const signal = scoped(request.signal);
+    const inspected = requireOperation(await inspect(signal), "get-collection");
+    const url = buildOdpOperationUrl(
+      inspected.document.http.endpoint_base,
+      "get-collection",
+      inspected.serviceOrigin,
+      id
+    );
+    addRepresentation(url, request.representation);
+    const value = await requestOdpValue(
+      transport,
+      url,
+      requestInit("GET", signal),
+      options.acceptLanguage,
+      catalogCache,
+      cachePartition,
+      "collection",
+      fallbacks.collectionMs,
+      parseAgentCollection
+    );
+    const collection = parseAgentCollection(value);
+    requireCollectionRepresentation(collection, request.representation ?? "full");
+    requireResourceId(collection.id, id, "Collection");
+    return collection;
+  }
+
   function getOffering(
     id: string,
     request?: OfferingGetOptions & { representation?: "full" }
@@ -412,16 +458,21 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     id: string,
     request: OfferingGetOptions = {}
   ): Promise<OfferingDetails | TerseOffering> {
+    const signal = scoped(request.signal);
     const { offering, serviceOpenApiUrl, url } = await getOfferingWire(id, request);
-    if (request.representation === "terse") return parseOfferingItem(offering, "1.0", false);
-    return enrichOffering(offering, url, serviceOpenApiUrl, request.signal);
+    // `getOfferingWire` has already asserted the representation. This is a Top-Level Document, not
+    // an item nested in a page, so it legitimately carries `odp_version` (VER-01 rather than
+    // VER-03) and must not go through the nested-item parser.
+    if (request.representation === "terse") return offering as TerseOffering;
+    return enrichOffering(offering, url, serviceOpenApiUrl, signal);
   }
 
   async function getOfferingWire(
     id: string,
     request: OfferingGetOptions
   ): Promise<{ offering: Offering; serviceOpenApiUrl?: string; url: URL }> {
-    const inspected = requireOperation(await inspect(request.signal), "get-offering");
+    const signal = scoped(request.signal);
+    const inspected = requireOperation(await inspect(signal), "get-offering");
     const url = buildOdpOperationUrl(
       inspected.document.http.endpoint_base,
       "get-offering",
@@ -433,7 +484,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
       await requestOdpValue(
         transport,
         url,
-        requestInit("GET", request.signal),
+        requestInit("GET", signal),
         options.acceptLanguage,
         catalogCache,
         cachePartition,
@@ -519,38 +570,15 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     continueSearchCollections(next, request = {}) {
       return sequence("search-collections", request, undefined, next);
     },
-    async getCollection(id, request = {}) {
-      const inspected = requireOperation(await inspect(request.signal), "get-collection");
-      const url = buildOdpOperationUrl(
-        inspected.document.http.endpoint_base,
-        "get-collection",
-        inspected.serviceOrigin,
-        id
-      );
-      addRepresentation(url, request.representation);
-      const value = await requestOdpValue(
-        transport,
-        url,
-        requestInit("GET", request.signal),
-        options.acceptLanguage,
-        catalogCache,
-        cachePartition,
-        "collection",
-        fallbacks.collectionMs,
-        parseAgentCollection
-      );
-      const collection = parseAgentCollection(value);
-      requireCollectionRepresentation(collection, request.representation ?? "full");
-      requireResourceId(collection.id, id, "Collection");
-      return collection;
-    },
+    getCollection,
     async getCollectionSearchCapabilities(id, request = {}) {
-      const inspected = await inspect(request.signal);
-      const collection = await this.getCollection(id, {
+      const signal = scoped(request.signal);
+      const inspected = await inspect(signal);
+      const collection = await getCollection(id, {
         representation: "full",
-        ...(request.signal === undefined ? {} : { signal: request.signal })
+        ...(signal === undefined ? {} : { signal })
       });
-      return resolveCapabilities(inspected, collection.search_capabilities, request.signal);
+      return resolveCapabilities(inspected, collection.search_capabilities, signal);
     },
     listOfferings,
     listCollectionOfferings,
@@ -559,9 +587,10 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
     continueSearchOfferings,
     getOffering,
     async resolveAction(offeringId, actionId, request = {}) {
+      const signal = scoped(request.signal);
       const { offering, serviceOpenApiUrl, url } = await getOfferingWire(offeringId, {
         representation: "full",
-        ...(request.signal === undefined ? {} : { signal: request.signal })
+        ...(signal === undefined ? {} : { signal })
       });
       const normalized = normalizeActions(offering.actions, url.origin, serviceOpenApiUrl);
       const action = normalized.actions?.find(({ id }) => id === actionId);
@@ -575,7 +604,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
           url: resolveResourceReference(reference.url, url),
           transport: supportingTransport,
           cache,
-          ...(request.signal === undefined ? {} : { signal: request.signal })
+          ...(signal === undefined ? {} : { signal })
         });
         return { action: httpAction, request_schema: resolved.schema };
       }
@@ -585,7 +614,7 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
         operationId: action.target.operation_id,
         transport: supportingTransport,
         cache,
-        ...(request.signal === undefined ? {} : { signal: request.signal })
+        ...(signal === undefined ? {} : { signal })
       });
       return {
         action: openApiAction,
@@ -594,15 +623,16 @@ export function createOdpServiceClient(options: OdpServiceClientOptions): OdpSer
       };
     },
     async getOfferingSearchCapabilities(collectionId, request = {}) {
-      const inspected = await inspect(request.signal);
+      const signal = scoped(request.signal);
+      const inspected = await inspect(signal);
       const collection =
         collectionId === undefined
           ? undefined
-          : await this.getCollection(collectionId, {
+          : await getCollection(collectionId, {
               representation: "full",
-              ...(request.signal === undefined ? {} : { signal: request.signal })
+              ...(signal === undefined ? {} : { signal })
             });
-      return resolveCapabilities(inspected, collection?.search_capabilities, request.signal);
+      return resolveCapabilities(inspected, collection?.search_capabilities, signal);
     }
   };
 
@@ -673,11 +703,12 @@ async function* collectionPages<Item>(
   } else {
     init = requestInit("GET", request.signal);
   }
-  const maximum = request.maxPages ?? 16;
-  requirePageLimit(maximum);
-  const visited = new Set(continuation === undefined ? [] : [continuation]);
+  const maximum = request.maxPages;
+  if (maximum !== undefined) requirePageLimit(maximum);
+  const strictness = itemStrictness(request.representation, continuation);
+  const visited = new Set<string>([String(url)]);
   let current = url;
-  for (let count = 0; count < maximum; count += 1) {
+  for (let count = 0; ; count += 1) {
     const raw = parseAgentCollectionPage(
       await requestOdpValue(
         transport,
@@ -694,18 +725,19 @@ async function* collectionPages<Item>(
     requirePageSize(raw.items);
     const page = {
       ...raw,
-      items: raw.items.map((item) =>
-        parseCollectionItem(item, raw.odp_version, request.representation === "full")
-      )
+      items: raw.items.map((item) => parseCollectionItem(item, raw.odp_version, strictness))
     } as PageEnvelope<Item>;
     yield page;
     if (page.next === undefined) return;
-    if (visited.has(page.next)) throw new Error("ODP pagination loop detected");
-    visited.add(page.next);
-    current = resolveContinuation(page.next, inspected.serviceOrigin);
+    if (maximum !== undefined && count + 1 >= maximum) return;
+    const next = resolveContinuation(page.next, inspected.serviceOrigin);
+    // Compare resolved URLs: a Service alternating between the relative and absolute spelling of
+    // one link would slip past a raw-string comparison (PAG-11).
+    if (visited.has(String(next))) throw new Error("ODP pagination loop detected");
+    visited.add(String(next));
+    current = next;
     init = requestInit("GET", request.signal);
   }
-  throw new RangeError("ODP pagination exceeded the 16-page traversal limit");
 }
 
 async function* offeringPages<Item>(
@@ -747,11 +779,13 @@ async function* offeringPages<Item>(
   } else {
     init = requestInit("GET", request.signal);
   }
-  const maximum = request.maxPages ?? 16;
-  requirePageLimit(maximum);
-  const visited = new Set(continuation === undefined ? [] : [continuation]);
+  const maximum = request.maxPages;
+  if (maximum !== undefined) requirePageLimit(maximum);
+  const strictness = itemStrictness(request.representation, continuation);
+  const requestedRefinements = body?.refinements;
+  const visited = new Set<string>([String(url)]);
   let current = url;
-  for (let count = 0; count < maximum; count += 1) {
+  for (let count = 0; ; count += 1) {
     const parser =
       operation === "search-offerings" ? parseAgentOfferingSearchResponse : parseAgentOfferingPage;
     const raw = parser(
@@ -768,22 +802,24 @@ async function* offeringPages<Item>(
       )
     ) as OfferingPage;
     requirePageSize(raw.items);
-    if ((continuation !== undefined || count > 0) && raw.refinements !== undefined)
-      throw new TypeError("ODP Offering search continuation cannot contain refinements");
+    if (continuation !== undefined || count > 0) {
+      // OFR-15: only the initial response of a search may carry refinements.
+      if (raw.refinements !== undefined)
+        throw new TypeError("ODP Offering search continuation cannot contain refinements");
+    } else requireRequestedRefinements(raw.refinements, requestedRefinements);
     const page = {
       ...raw,
-      items: raw.items.map((item) =>
-        parseOfferingItem(item, raw.odp_version, request.representation === "full")
-      )
+      items: raw.items.map((item) => parseOfferingItem(item, raw.odp_version, strictness))
     } as OfferingPage<Item>;
     yield page;
     if (page.next === undefined) return;
-    if (visited.has(page.next)) throw new Error("ODP pagination loop detected");
-    visited.add(page.next);
-    current = resolveContinuation(page.next, inspected.serviceOrigin);
+    if (maximum !== undefined && count + 1 >= maximum) return;
+    const next = resolveContinuation(page.next, inspected.serviceOrigin);
+    if (visited.has(String(next))) throw new Error("ODP pagination loop detected");
+    visited.add(String(next));
+    current = next;
     init = requestInit("GET", request.signal);
   }
-  throw new RangeError("ODP pagination exceeded the 16-page traversal limit");
 }
 
 function itemIterable<Item>(
@@ -797,13 +833,25 @@ function itemIterable<Item>(
       let count = 0;
       for await (const page of pages()) {
         for (const item of page.items) {
-          if (maximum !== undefined && count >= maximum) return;
           count += 1;
           yield item;
+          // PAG-30: stop the moment the caller's limit is met. Checking on the *next* item instead
+          // let the enclosing `for await` pull one more page whenever the limit fell on a page
+          // boundary — a request the caller never asked for.
+          if (maximum !== undefined && count >= maximum) return;
         }
       }
     }
   };
+}
+
+/** Returns `request` with the client-wide signal folded in, without mutating the caller's object. */
+function withScopedSignal<Request extends { signal?: AbortSignal }>(
+  request: Request,
+  signal: AbortSignal | undefined
+): Request {
+  if (signal === request.signal) return request;
+  return { ...request, ...(signal === undefined ? {} : { signal }) };
 }
 
 function requireOperation(
@@ -850,16 +898,36 @@ function parseAgentSortPage(value: unknown): PageEnvelope<SortDefinition> {
   return parseSortDefinitionPage(normalizeAgentResponse(value, "sort-page"));
 }
 
+/**
+ * VER-03: a nested item inherits its container's version and must not restate `odp_version`.
+ * Spreading the item over an injected version would have accepted — and silently discarded — a
+ * repeated one.
+ */
+function requireInheritedVersion(value: object): void {
+  if ("odp_version" in value) throw new TypeError("ODP terse item cannot repeat odp_version");
+}
+
+/**
+ * `full` is `undefined` on a continuation the caller did not label: the representation was fixed by
+ * the request that produced the continuation link, which this call cannot see, so neither shape may
+ * be asserted (PAG-37).
+ */
 function parseOfferingItem(value: unknown, version: "1.0", full: true): Offering;
 function parseOfferingItem(value: unknown, version: "1.0", full: false): TerseOffering;
-function parseOfferingItem(value: unknown, version: "1.0", full: boolean): Offering | TerseOffering;
 function parseOfferingItem(
   value: unknown,
   version: "1.0",
-  full: boolean
+  full: boolean | undefined
+): Offering | TerseOffering;
+function parseOfferingItem(
+  value: unknown,
+  version: "1.0",
+  full: boolean | undefined
 ): Offering | TerseOffering {
   if (typeof value !== "object" || value === null) return parseAgentOffering(value);
+  requireInheritedVersion(value);
   const parsed = parseAgentOffering({ odp_version: version, ...value });
+  if (full === undefined) return structuredClone(value) as TerseOffering;
   requireOfferingRepresentation(parsed, full ? "full" : "terse");
   if (full) return parsed;
   return structuredClone(value) as TerseOffering;
@@ -868,10 +936,12 @@ function parseOfferingItem(
 function parseCollectionItem(
   value: unknown,
   version: "1.0",
-  full: boolean
+  full: boolean | undefined
 ): Collection | TerseCollection {
   if (typeof value !== "object" || value === null) return parseAgentCollection(value);
+  requireInheritedVersion(value);
   const parsed = parseAgentCollection({ odp_version: version, ...value });
+  if (full === undefined) return structuredClone(value) as TerseCollection;
   requireCollectionRepresentation(parsed, full ? "full" : "terse");
   if (full) return parsed;
   return structuredClone(value) as TerseCollection;
@@ -892,6 +962,42 @@ function requireCollectionRepresentation(
     throw new TypeError("ODP Full Collection cannot contain detail_fields");
 }
 
+/**
+ * `undefined` means "do not assert a representation": on a continuation the caller did not label,
+ * the shape was fixed by the request that produced the link and is not knowable here (PAG-37).
+ */
+function itemStrictness(
+  representation: Representation | undefined,
+  continuation: string | undefined
+): boolean | undefined {
+  if (representation !== undefined) return representation === "full";
+  return continuation === undefined ? false : undefined;
+}
+
+/**
+ * OFR-14 and FLT-30: a search response may carry `refinements` only when the request asked for
+ * them, every returned `filter_id` must have been requested, and no group may repeat.
+ */
+function requireRequestedRefinements(
+  groups: { filter_id: string }[] | undefined,
+  requested: string[] | undefined
+): void {
+  if (groups === undefined) return;
+  if (requested === undefined)
+    throw new TypeError("ODP Offering search returned refinements that were not requested");
+  const allowed = new Set(requested);
+  const seen = new Set<string>();
+  for (const group of groups) {
+    if (!allowed.has(group.filter_id))
+      throw new TypeError(
+        `ODP Offering search returned refinement ${group.filter_id} that was not requested`
+      );
+    if (seen.has(group.filter_id))
+      throw new TypeError(`ODP Offering search repeated refinement group ${group.filter_id}`);
+    seen.add(group.filter_id);
+  }
+}
+
 function requirePageSize(items: unknown[]): void {
   if (items.length > 100) throw new RangeError("ODP page cannot contain more than 100 items");
 }
@@ -906,8 +1012,8 @@ function requireLimit(value: number, name: string): void {
 }
 
 function requirePageLimit(value: number): void {
-  if (!Number.isInteger(value) || value < 1 || value > 16)
-    throw new RangeError("maxPages must be an integer from 1 through 16");
+  if (!Number.isInteger(value) || value < 1)
+    throw new RangeError("maxPages must be a positive integer");
 }
 
 function requireFallback(value: number, name: string): void {
