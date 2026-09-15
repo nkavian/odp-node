@@ -75,20 +75,41 @@ export function createOdpAgent(options: OdpAgentOptions = {}): OdpAgent {
             100
           );
           const concurrency = bounded(request.concurrency ?? 4, "concurrency", 1, 16);
-          const services: DirectoryService[] = [];
-          for await (const service of directory.searchServices(request.services, {
-            maxItems: maxServices,
-            ...(request.signal === undefined ? {} : { signal: request.signal })
-          }).items)
-            services.push(service);
+          // Every service search is started eagerly, so a consumer that stops after the first few
+          // events would otherwise leave the rest running with nobody to observe them.
+          const controller = new AbortController();
+          const signal =
+            request.signal === undefined
+              ? controller.signal
+              : AbortSignal.any([request.signal, controller.signal]);
+          try {
+            const services: DirectoryService[] = [];
+            for await (const service of directory.searchServices(request.services, {
+              maxItems: maxServices,
+              signal
+            }).items)
+              services.push(service);
 
-          const schedule = createScheduler(concurrency);
-          const results = services.map((service) =>
-            schedule(() =>
-              searchService(service, request.offerings ?? {}, maxOfferings, request.signal)
-            )
-          );
-          for (const result of results) yield* await result;
+            const schedule = createScheduler(concurrency);
+            // Settling each task as it is created means no scheduled promise can ever reject
+            // without a handler — a consumer `break` used to crash the process with an unhandled
+            // rejection once any in-flight service search failed.
+            const results = services.map((service) =>
+              schedule(() =>
+                searchService(service, request.offerings ?? {}, maxOfferings, signal)
+              ).then(
+                (events) => ({ ok: true, events }) as const,
+                (error: unknown) => ({ ok: false, error }) as const
+              )
+            );
+            for (const result of results) {
+              const settled = await result;
+              if (!settled.ok) throw settled.error;
+              yield* settled.events;
+            }
+          } finally {
+            controller.abort();
+          }
         }
       };
     }
@@ -114,6 +135,9 @@ export function createOdpAgent(options: OdpAgentOptions = {}): OdpAgent {
         events.push({ type: "offering", service, offering });
       return events;
     } catch (cause) {
+      // Only an actual abort ends the traversal. Testing `signal.aborted` alone reported any
+      // failure that merely coincided with an abort as an AbortError and discarded its cause.
+      if (isAbortError(cause)) throw cause;
       if (signal?.aborted === true)
         throw signal.reason ?? new DOMException("The operation was aborted", "AbortError");
       return [
@@ -130,17 +154,36 @@ export function createOdpAgent(options: OdpAgentOptions = {}): OdpAgent {
   }
 }
 
+function isAbortError(value: unknown): boolean {
+  return value instanceof Error && value.name === "AbortError";
+}
+
+/**
+ * Counting semaphore with direct hand-off: a finishing task passes its permit straight to the next
+ * waiter instead of returning it to the pool. Decrementing first and waking a waiter afterwards let
+ * a task submitted in between claim the freed slot and take the count over the limit.
+ */
 function createScheduler(concurrency: number) {
   let active = 0;
   const waiting: (() => void)[] = [];
+  const acquire = async (): Promise<void> => {
+    if (active < concurrency) {
+      active += 1;
+      return;
+    }
+    await new Promise<void>((resolve) => waiting.push(resolve));
+  };
+  const release = (): void => {
+    const next = waiting.shift();
+    if (next === undefined) active -= 1;
+    else next();
+  };
   return async <Value>(task: () => Promise<Value>): Promise<Value> => {
-    if (active >= concurrency) await new Promise<void>((resolve) => waiting.push(resolve));
-    active += 1;
+    await acquire();
     try {
       return await task();
     } finally {
-      active -= 1;
-      waiting.shift()?.();
+      release();
     }
   };
 }

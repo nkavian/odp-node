@@ -7,6 +7,7 @@ import {
   type Collection,
   type Offering,
   type PageEnvelope,
+  type Representation,
   type TerseCollection,
   type TerseOffering
 } from "@offering-protocol/core";
@@ -15,16 +16,27 @@ import { OdpServiceError, type OdpCatalog, type OdpCatalogRequest } from "./serv
 
 export interface StaticCatalogOptions {
   collections?: Collection[];
+  /**
+   * Key used to sign continuation cursors. Supply a stable secret of at least 32 bytes so that
+   * cursors issued by one process remain usable by another, and survive a restart. When omitted a
+   * random key is generated, which confines every cursor to the lifetime of this catalog instance.
+   */
+  continuationKey?: Uint8Array | string;
   offerings: Offering[];
 }
+
+const MINIMUM_KEY_BYTES = 32;
 
 interface StaticContinuation {
   expiresAt: number;
   limit: number;
   offset: number;
   target: string;
-  representation: string;
+  representation: Representation;
 }
+
+/** PAG-13: a page holds 1 through 100 items, so a cursor can only ever name a limit in range. */
+const MAXIMUM_LIMIT = 100;
 
 export function createStaticCatalog(options: StaticCatalogOptions): OdpCatalog {
   const offerings = cloneUnique(options.offerings.map(parseOffering), "Offering");
@@ -32,7 +44,7 @@ export function createStaticCatalog(options: StaticCatalogOptions): OdpCatalog {
   const offeringById = new Map(offerings.map((offering) => [offering.id, offering]));
   const collectionById = new Map(collections.map((collection) => [collection.id, collection]));
   validateRelationships(offerings, collections, collectionById);
-  const continuationKey = randomBytes(32);
+  const continuationKey = signingKey(options.continuationKey);
 
   return {
     listOfferings: (request) => page(offerings, request, terseOffering, continuationKey),
@@ -56,6 +68,16 @@ export function createStaticCatalog(options: StaticCatalogOptions): OdpCatalog {
           }
         })
   };
+}
+
+/** Caller-supplied signing material, or a per-instance random key when none was given. */
+function signingKey(value: Uint8Array | string | undefined): Uint8Array {
+  if (value === undefined) return randomBytes(MINIMUM_KEY_BYTES);
+  const key = typeof value === "string" ? Buffer.from(value, "utf8") : value;
+  if (key.byteLength < MINIMUM_KEY_BYTES)
+    throw new TypeError(`continuationKey must be at least ${String(MINIMUM_KEY_BYTES)} bytes`);
+  // A copy, so that mutating the caller's array cannot silently invalidate live continuations.
+  return Uint8Array.prototype.slice.call(key);
 }
 
 function page<Full, Terse>(
@@ -89,7 +111,7 @@ function page<Full, Terse>(
 
 function continuation(
   offset: number,
-  representation: string,
+  representation: Representation,
   limit: number,
   continuationKey: Uint8Array,
   request: Request
@@ -226,13 +248,18 @@ function decodeContinuation(
     const state = value as Partial<StaticContinuation>;
     if (
       !Number.isSafeInteger(state.expiresAt) ||
-      !Number.isInteger(state.limit) ||
-      !Number.isInteger(state.offset) ||
+      !Number.isSafeInteger(state.limit) ||
+      !Number.isSafeInteger(state.offset) ||
       typeof state.target !== "string" ||
       (state.representation !== "terse" && state.representation !== "full")
     )
       return undefined;
-    return state as StaticContinuation;
+    const continuation = state as StaticContinuation;
+    // PAG-26: a cursor is untrusted input even after its signature verifies. The signature proves
+    // only that this Service minted the bytes, never that they still name a position it can serve.
+    if (continuation.limit < 1 || continuation.limit > MAXIMUM_LIMIT || continuation.offset < 0)
+      return undefined;
+    return continuation;
   } catch {
     return undefined;
   }

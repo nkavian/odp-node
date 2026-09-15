@@ -143,6 +143,12 @@ omitted and described in the result's scoped `issues` array. Terse retrieval doe
 enrichment. Cross-document schema composition uses `$ref`; `$dynamicRef` accepts only a fragment
 reference such as `#node`.
 
+Attribute Schema processing is limited to 256 KiB per document, 16 documents, eight reference
+levels, one MiB for the complete graph, and 30 seconds for graph resolution. Regular-expression
+patterns are limited to 1,000 characters and patterns containing nested unbounded quantifiers are
+rejected. Validation stops at the first error. These are SDK safety ceilings; callers can impose a
+shorter deadline with an `AbortSignal` but cannot raise the ceilings.
+
 Action targets are normalized to absolute URLs during full Offering retrieval. Their supporting
 documents remain lazy: `resolveAction(offeringId, actionId)` resolves a compact request schema or
 validates an OpenAPI 3.1 document and selects its unique `operation_id`. It never invokes the
@@ -161,7 +167,8 @@ if (offering.actions?.some(({ id }) => id === "quote")) {
 Attribute Schema and OpenAPI retrieval uses `supportingTransport`, which defaults to anonymous
 `fetch` rather than the catalog `transport`. This keeps payment and enrollment credentials out of
 supporting-document requests. Both transports may share the client's cache; supporting resources
-use an anonymous cache partition.
+use an anonymous cache partition. OpenAPI documents are limited to one MiB and 32 JSON nesting
+levels.
 
 ## Errors
 

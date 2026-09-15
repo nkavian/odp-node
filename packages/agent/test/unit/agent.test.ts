@@ -160,4 +160,181 @@ describe("ODP agent", () => {
     );
     expect(directoryTransport).not.toHaveBeenCalled();
   });
+  it("does not leave a rejected Service search unhandled when the consumer stops early", async () => {
+    const services = [
+      directoryService("https://one.example", "One"),
+      directoryService("https://two.example", "Two"),
+      directoryService("https://three.example", "Three")
+    ];
+    const unhandled: unknown[] = [];
+    const capture = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", capture);
+    try {
+      const agent = createOdpAgent({
+        directoryTransport: vi.fn(() => Promise.resolve(directoryJson({ items: services }))),
+        serviceClient(service) {
+          return createOdpServiceClient({
+            serviceUrl: service.service_origin,
+            transport: vi.fn(async (input) => {
+              const url = new URL(input instanceof Request ? input.url : String(input));
+              if (url.pathname === "/.well-known/odp") return json(serviceDocument);
+              if (service.name !== "One") {
+                // Long enough that this search is still in flight when the consumer breaks.
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                throw new Error("service exploded");
+              }
+              return json({ odp_version: "1.0", items: [{ id: "one", name: "One" }] });
+            }),
+            cachePartition: "test"
+          });
+        }
+      });
+
+      for await (const event of agent.searchOfferingsAcrossServices({ concurrency: 3 })) {
+        expect(event.type).toBe("offering");
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Every scheduled search used to be an unattended promise; one rejecting after the consumer
+      // stopped brought the process down under Node's default rejection handling.
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off("unhandledRejection", capture);
+    }
+  });
+
+  it("stops in-flight Service searches once the consumer stops iterating", async () => {
+    const services = [
+      directoryService("https://one.example", "One"),
+      directoryService("https://two.example", "Two")
+    ];
+    const signals: AbortSignal[] = [];
+    const agent = createOdpAgent({
+      directoryTransport: vi.fn(() => Promise.resolve(directoryJson({ items: services }))),
+      serviceClient(service) {
+        return createOdpServiceClient({
+          serviceUrl: service.service_origin,
+          transport: vi.fn(async (input: URL, init?: RequestInit) => {
+            const url = new URL(String(input));
+            if (url.pathname === "/.well-known/odp") return json(serviceDocument);
+            const signal = init?.signal;
+            if (signal instanceof AbortSignal) signals.push(signal);
+            if (service.name === "Two") await new Promise((resolve) => setTimeout(resolve, 20));
+            return json({
+              odp_version: "1.0",
+              items: [{ id: service.name.toLowerCase(), name: service.name }]
+            });
+          }),
+          cachePartition: "test"
+        });
+      }
+    });
+
+    for await (const event of agent.searchOfferingsAcrossServices({ concurrency: 2 })) {
+      void event;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(signals.length).toBeGreaterThan(0);
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+  });
+
+  it("holds concurrency at the bound even when a task is submitted mid-release", async () => {
+    // `createScheduler` is not exported, so exercise it through the public path with a bound of 1.
+    const services = Array.from({ length: 4 }, (_value, index) =>
+      directoryService(`https://s${String(index)}.example`, `S${String(index)}`)
+    );
+    let active = 0;
+    let maximumActive = 0;
+    const agent = createOdpAgent({
+      directoryTransport: vi.fn(() => Promise.resolve(directoryJson({ items: services }))),
+      serviceClient(service) {
+        return createOdpServiceClient({
+          serviceUrl: service.service_origin,
+          transport: vi.fn(async (input) => {
+            const url = new URL(input instanceof Request ? input.url : String(input));
+            if (url.pathname === "/.well-known/odp") return json(serviceDocument);
+            active += 1;
+            maximumActive = Math.max(maximumActive, active);
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            active -= 1;
+            return json({ odp_version: "1.0", items: [{ id: "x", name: service.name }] });
+          }),
+          cachePartition: "test"
+        });
+      }
+    });
+    const events = [];
+    for await (const event of agent.searchOfferingsAcrossServices({ concurrency: 1 }))
+      events.push(event);
+    expect(events).toHaveLength(4);
+    expect(maximumActive).toBe(1);
+  });
+
+  it("surfaces an abort as an abort rather than a per-Service issue", async () => {
+    const controller = new AbortController();
+    const agent = createOdpAgent({
+      directoryTransport: vi.fn(() =>
+        Promise.resolve(directoryJson({ items: [directoryService("https://one.example", "One")] }))
+      ),
+      serviceClient(service) {
+        return createOdpServiceClient({
+          serviceUrl: service.service_origin,
+          transport: vi.fn(async (input: URL, init?: RequestInit) => {
+            const url = new URL(String(input));
+            if (url.pathname === "/.well-known/odp") return json(serviceDocument);
+            controller.abort();
+            await new Promise((resolve) => setTimeout(resolve, 1));
+            init?.signal?.throwIfAborted();
+            return json({ odp_version: "1.0", items: [] });
+          }),
+          cachePartition: "test"
+        });
+      }
+    });
+    await expect(
+      (async () => {
+        await drain(agent.searchOfferingsAcrossServices({ signal: controller.signal }));
+      })()
+    ).rejects.toThrow();
+  });
+
+  it("uses list-collection-offerings when only a Collection is named", async () => {
+    const paths: string[] = [];
+    const agent = createOdpAgent({
+      directoryTransport: vi.fn(() =>
+        Promise.resolve(directoryJson({ items: [directoryService("https://one.example", "One")] }))
+      ),
+      serviceClient(service) {
+        return createOdpServiceClient({
+          serviceUrl: service.service_origin,
+          transport: vi.fn((input) => {
+            const url = new URL(input instanceof Request ? input.url : String(input));
+            if (url.pathname === "/.well-known/odp")
+              return Promise.resolve(
+                json({
+                  ...serviceDocument,
+                  operations: [
+                    ...serviceDocument.operations,
+                    { authentication: "not-required", name: "list-collection-offerings" }
+                  ]
+                })
+              );
+            paths.push(url.pathname);
+            return Promise.resolve({ odp_version: "1.0", items: [] }).then((value) => json(value));
+          }),
+          cachePartition: "test"
+        });
+      }
+    });
+    await drain(agent.searchOfferingsAcrossServices({ offerings: { collection_id: "compute" } }));
+    expect(paths).toEqual(["/odp/collections/compute/offerings"]);
+  });
 });
+
+/** Consumes an async iterable for its side effects, without binding an unused loop variable. */
+async function drain(iterable: AsyncIterable<unknown>): Promise<void> {
+  for await (const item of iterable) void item;
+}

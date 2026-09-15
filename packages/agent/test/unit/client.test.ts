@@ -382,11 +382,13 @@ describe("ODP Service Collection client", () => {
 
   it("partitions protected cache entries and disables them without a partition", async () => {
     const cache = createInMemoryOdpCache();
-    const transport = transportFor((url) =>
-      url.pathname === "/.well-known/odp"
-        ? response(service)
-        : response({ odp_version: "1.0", id: "compute", name: "Compute" })
-    );
+    let wellKnownRequests = 0;
+    const transport = transportFor((url) => {
+      if (url.pathname !== "/.well-known/odp")
+        return response({ odp_version: "1.0", id: "compute", name: "Compute" });
+      wellKnownRequests += 1;
+      return response(service);
+    });
     const first = createOdpServiceClient({
       serviceUrl: "https://example.com",
       cache,
@@ -401,17 +403,26 @@ describe("ODP Service Collection client", () => {
     });
     await first.getCollection("compute");
     await second.getCollection("compute");
+    // Each partition fetches its own Service Document and its own Collection: the document used to
+    // be stored unpartitioned, so an authenticated one could be read back by another context.
+    expect(transport).toHaveBeenCalledTimes(4);
+    expect(wellKnownRequests).toBe(2);
+
+    // A repeat inside one partition is served from cache.
     await first.getCollection("compute");
-    expect(transport).toHaveBeenCalledTimes(3);
+    expect(transport).toHaveBeenCalledTimes(4);
 
     const unpartitioned = createOdpServiceClient({
       serviceUrl: "https://example.com",
       cache,
       transport
     });
+    // A caller-supplied transport with no declared partition gets no shared caching at all, but the
+    // Service Document is still reused from a cache private to that client.
     await unpartitioned.getCollection("compute");
+    expect(transport).toHaveBeenCalledTimes(6);
     await unpartitioned.getCollection("compute");
-    expect(transport).toHaveBeenCalledTimes(5);
+    expect(transport).toHaveBeenCalledTimes(7);
   });
 
   it("coalesces identical Collection requests and repairs invalid cache records", async () => {

@@ -29,6 +29,9 @@ export async function resolveOpenApiOperation(
     accept: "application/vnd.oai.openapi+json;version=3.1, application/json;q=0.9",
     mediaTypes: ["application/vnd.oai.openapi+json", "application/json"],
     maximumBytes: 1_048_576,
+    // OFR-73 gives the OpenAPI Action document its own nesting allowance of 32, well above the 16
+    // that applies to ODP documents; a real 3.1 document nests past 16 without difficulty.
+    maximumDepth: 32,
     validate: (candidate) =>
       requireJsonObject(candidate, "ODP OpenAPI document must be a JSON object"),
     ...(options.signal === undefined ? {} : { signal: options.signal })
@@ -42,26 +45,46 @@ export async function resolveOpenApiOperation(
   const validation = await validate("https://spec.openapis.org/oas/3.1/schema-base", document);
   if (!validation.valid) throw new TypeError("ODP Action OpenAPI document is invalid");
   const matches: Record<string, unknown>[] = [];
-  const paths = requireJsonObject(document["paths"], "ODP OpenAPI document must contain paths");
-  for (const path of Object.values(paths)) {
-    if (typeof path !== "object" || path === null || Array.isArray(path)) continue;
-    const item = path as Record<string, unknown>;
+  // OFR-69 requires the document to hold *exactly one* matching Operation Object. OpenAPI 3.1
+  // makes `paths` optional and lets Operation Objects live under `webhooks` and
+  // `components.pathItems` too, so all three are searched: missing one would both fail to find a
+  // legitimate operation and fail to notice a duplicate that makes the reference ambiguous.
+  for (const container of ["paths", "webhooks"] as const)
+    collectOperations(document[container], options.operationId, matches);
+  const components = document["components"];
+  if (typeof components === "object" && components !== null && !Array.isArray(components))
+    collectOperations(
+      (components as Record<string, unknown>)["pathItems"],
+      options.operationId,
+      matches
+    );
+  if (matches.length !== 1)
+    throw new TypeError(`ODP Action operation_id ${options.operationId} must resolve exactly once`);
+  const operation = matches[0];
+  if (operation === undefined) throw new TypeError("ODP Action OpenAPI operation is unavailable");
+  return { document: structuredClone(document), operation: structuredClone(operation) };
+}
+
+/** Collects every Operation Object under a Path Items container whose `operationId` matches. */
+function collectOperations(
+  container: unknown,
+  operationId: string,
+  matches: Record<string, unknown>[]
+): void {
+  if (typeof container !== "object" || container === null || Array.isArray(container)) return;
+  for (const pathItem of Object.values(container as Record<string, unknown>)) {
+    const item = pathItem as Record<string, unknown>;
     for (const method of METHODS) {
       const candidate = item[method];
       if (
         typeof candidate === "object" &&
         candidate !== null &&
         !Array.isArray(candidate) &&
-        (candidate as Record<string, unknown>)["operationId"] === options.operationId
+        (candidate as Record<string, unknown>)["operationId"] === operationId
       )
         matches.push(candidate as Record<string, unknown>);
     }
   }
-  if (matches.length !== 1)
-    throw new TypeError(`ODP Action operation_id ${options.operationId} must resolve exactly once`);
-  const operation = matches[0];
-  if (operation === undefined) throw new TypeError("ODP Action OpenAPI operation is unavailable");
-  return { document: structuredClone(document), operation: structuredClone(operation) };
 }
 
 function requireJsonObject(value: unknown, message: string): JsonObject {
