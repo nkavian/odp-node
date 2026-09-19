@@ -12,15 +12,15 @@ Official TypeScript software development kits for the
 Services and navigating their Offerings.
 
 ODP separates Service discovery from catalog discovery. An Agent searches the canonical directory
-for candidate Services, inspects each Service's live ODP document, and then navigates or searches
+for candidate Services or indexed Collections, inspects the owning Service's live ODP document, and then navigates or searches
 that Service's Collections and Offerings. Full Offering details can describe structured attributes,
 price previews, and executable Actions without forcing every industry into one product schema.
 
 ```text
 Agent                                 Canonical Directory                   Service
   │                                     │                                     │
-  ├── Search Services ─────────────────▶│                                     │
-  │◀── Cached Service metadata ─────────┤                                     │
+  ├── Search Directory ────────────────▶│                                     │
+  │◀── Service / Collection metadata ───┤                                     │
   │                                     │                                     │
   ├── Inspect /.well-known/odp ──────────────────────────────────────────────▶│
   │◀── Operations and protocol capabilities ──────────────────────────────────┤
@@ -40,7 +40,7 @@ Choose the role you are implementing:
 | ------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
 | An Agent, command-line tool, or automation | [`@offering-protocol/agent`](./packages/agent/README.md)         | Directory-to-Service search, catalog navigation, enrichment, and Action discovery  |
 | A Service with an ODP catalog              | [`@offering-protocol/service`](./packages/service/README.md)     | Service document, fixed routes, static catalogs, and storage-backed handlers       |
-| A canonical-directory integration          | [`@offering-protocol/directory`](./packages/directory/README.md) | Production or sandbox Service search with bounded lazy pagination                  |
+| A canonical-directory integration          | [`@offering-protocol/directory`](./packages/directory/README.md) | Mixed Service/Collection search, suggestions, and Service-only discovery           |
 | An ODP implementation or validation tool   | [`@offering-protocol/core`](./packages/core/README.md)           | Protocol models, bundled schemas, validation, identity, references, and pagination |
 
 All packages are ESM-first, support Node.js 22 or newer, and publish under the
@@ -63,8 +63,14 @@ Use `npm install` or `yarn add` if those are the package managers in your applic
 
 ## Agent Workflow
 
+For general Directory discovery, use [`directory.search()`](./packages/directory/README.md#search-the-directory)
+to receive typed Service and Collection results, and `directory.suggest()` to obtain matching names.
+The Directory indexes submitted Collections, not every Offering in a Service's catalog. Its mixed
+search returns at most 100 results and currently has no continuation; refine queries to narrow results.
+
 `createOdpAgent` searches the canonical directory and then searches the live catalogs of matching
-Services. Directory results never pretend to contain complete Service catalogs.
+Services. This orchestration uses `searchServices()`, the Service-only API, and does not interpret
+mixed results as Services. Directory results never pretend to contain complete Service catalogs.
 
 ```ts
 import { createOdpAgent } from "@offering-protocol/agent";

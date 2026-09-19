@@ -1,6 +1,6 @@
 # `@offering-protocol/directory`
 
-The official client for canonical Offering Discovery Protocol Service discovery.
+The official client for discovering Services and indexed Collections in the canonical directory.
 
 ## Install
 
@@ -16,9 +16,64 @@ The package has two environments and no configurable base URL:
 
 A fetch-compatible `transport` can be injected for testing without changing the selected origin.
 
-## Search for Services
+## Search the Directory
 
-Directory search covers cached Service metadata, not Service catalogs. Filter values within one
+`search()` returns Services and explicitly indexed Collections. It searches cached names,
+descriptions, and Service keywords; it does not crawl catalogs or search individual Offerings.
+Omit `types` to include both result types, or pass `["service"]` or `["collection"]`.
+
+```ts
+import { createDirectoryClient } from "@offering-protocol/directory";
+
+const directory = createDirectoryClient();
+for await (const result of directory.search({ query: "weather", limit: 25 }).items) {
+  switch (result.type) {
+    case "service":
+      useService(result.service.service_origin);
+      break;
+    case "collection":
+      useCollection(result.service.service_origin, result.collection.id);
+      break;
+    case "unknown":
+      reportUnsupportedType(result.resource_type, result.raw);
+      break;
+  }
+}
+```
+
+The example's `useService`, `useCollection`, and `reportUnsupportedType` functions represent your
+application's handling of a result. A Collection ID is scoped to its owning Service: two Services
+can both have a Collection named `weather`. Preserve the origin and ID together. Inspect the
+Service's live ODP document before fetching authoritative Collection details through
+`createOdpServiceClient` from `@offering-protocol/agent`.
+
+Each known result carries `service` metadata and `indexed_at`. For a Collection, the outer timestamp
+describes its indexed metadata; `service.indexed_at` describes its parent. A Service result can have
+`available_through`, a platform reference with `service_id`, `service_origin`, and optional `name`.
+This describes availability, not brand ownership. A Collection's owning `service` provides its
+attribution.
+
+Mixed filters use the same `filters` structure shown below and apply to the owning Service.
+Whitespace-separated query terms are alternatives, matched as case-insensitive substrings.
+Facets count all matching targets: a Service and two matching Collections count as three, even if
+the response limit excludes some of them.
+
+`items` and `pages` are independent lazy traversals beginning with `POST /v1/directory/search`.
+The server returns at most 100 items (also its default) and currently provides no continuation.
+**An absent `next` does not mean every matching target was returned.** Narrow the query or filters
+when necessary. The client supports optional same-origin continuation links when supplied, and
+`continueSearch(next)` resumes one with GET. It does not invent cursors or additional requests.
+`maxItems`, `maxPages`, and `signal` work as with Service-only search.
+
+Known result types are validated; malformed entries appear in the page's `issues` with their
+original indexes and are omitted from `items`. An unfamiliar type is instead preserved as
+`{ type: "unknown", resource_type, raw }`. Do not treat its unvalidated `raw` content as a Service
+or automatically follow URLs inside it. Additional fields on known results are tolerated. Nested
+Service metadata uses the validation policy documented below.
+
+## Search for Services only
+
+`searchServices()` covers cached Service metadata, not Collections or Service catalogs. Filter values within one
 category use OR semantics; different categories combine with AND semantics. The initial page can
 include facets for keywords, enrollment protocols, payment protocols, individual protocol payment
 options, trust protocols, and ODP operation descriptors.
@@ -78,7 +133,23 @@ Service undiscoverable.
 
 ## Suggestions
 
-`suggestServices` returns bounded lexical suggestions for a prefix. Natural-language interpretation
+`suggest()` finds matching index rows across Service and Collection names, descriptions, and
+Service keywords, then returns the **names of matching targets**. Matching is case-insensitive
+substring search, despite the input parameter being named `prefix`. For example, `we` can match
+`weather` in a description and return the Collection name `AccuWeather`.
+
+```ts
+const names = await directory.suggest({ prefix: "we", limit: 10 });
+// Use a selected name as the query for directory.search().
+```
+
+The endpoint is `GET /v1/directory/suggestions`. Suggestions are deduplicated search strings, not
+resource identifiers. They do not tell you which target type supplied each name. The server ranks
+names by the total number of matching index rows, then alphabetically, and returns at most 25.
+Collection suggestions do not require permission to display that Collection's landing-page card.
+
+`suggestServices()` calls `GET /v1/services/suggestions` and returns matching **Service keywords**
+beginning with the prefix. Pair it with `searchServices()` for Service-only workflows. Natural-language interpretation
 is not required by the directory contract. The client de-duplicates the response and returns at most
 25 suggestions whatever the server sends.
 

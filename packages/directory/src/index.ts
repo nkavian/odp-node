@@ -1,5 +1,6 @@
 import {
   PAYMENT_OPTIONS,
+  isLocalResourceIdentifier,
   parseAgentServiceDocument,
   type AuthenticationRequirement,
   type EnrollmentProtocol,
@@ -44,6 +45,48 @@ export interface DirectorySearchRequest {
   filters?: DirectoryServiceFilters;
   limit?: number;
 }
+
+export interface DirectoryResourceSearchRequest extends DirectorySearchRequest {
+  types?: Array<"service" | "collection">;
+}
+
+export interface DirectoryServiceReference extends Record<string, unknown> {
+  service_id: string;
+  service_origin: string;
+  name?: string;
+}
+
+export interface DirectoryIndexedService extends DirectoryService {
+  service_id: string;
+}
+
+export interface DirectoryServiceResult extends Record<string, unknown> {
+  type: "service";
+  service: DirectoryIndexedService;
+  indexed_at: string;
+  available_through?: DirectoryServiceReference;
+}
+
+export interface DirectoryCollectionResult extends Record<string, unknown> {
+  type: "collection";
+  service: DirectoryIndexedService;
+  indexed_at: string;
+  collection: {
+    [key: string]: unknown;
+    id: string;
+    name: string;
+    description?: string;
+  };
+}
+
+export interface DirectoryUnknownResult {
+  type: "unknown";
+  resource_type: string;
+  raw: Record<string, unknown>;
+}
+
+export type DirectoryResult =
+  DirectoryServiceResult | DirectoryCollectionResult | DirectoryUnknownResult;
 
 export interface DirectoryIterationOptions {
   maxItems?: number;
@@ -92,8 +135,8 @@ export interface DirectoryIssue {
   message: string;
 }
 
-export interface DirectorySearchPage extends Record<string, unknown> {
-  items: DirectoryService[];
+export interface DirectorySearchPage<Item = DirectoryService> extends Record<string, unknown> {
+  items: Item[];
   next?: string;
   facets?: DirectoryFacets;
   /**
@@ -104,9 +147,9 @@ export interface DirectorySearchPage extends Record<string, unknown> {
   issues?: DirectoryIssue[];
 }
 
-export interface DirectorySearchSequence {
-  items: AsyncIterable<DirectoryService>;
-  pages: AsyncIterable<DirectorySearchPage>;
+export interface DirectorySearchSequence<Item = DirectoryService> {
+  items: AsyncIterable<Item>;
+  pages: AsyncIterable<DirectorySearchPage<Item>>;
 }
 
 export interface DirectorySuggestionRequest {
@@ -117,6 +160,15 @@ export interface DirectorySuggestionRequest {
 
 export interface DirectoryClient {
   readonly environment: DirectoryEnvironment;
+  search(
+    request?: DirectoryResourceSearchRequest,
+    options?: DirectoryIterationOptions
+  ): DirectorySearchSequence<DirectoryResult>;
+  continueSearch(
+    next: string,
+    options?: DirectoryIterationOptions
+  ): DirectorySearchSequence<DirectoryResult>;
+  suggest(request: DirectorySuggestionRequest): Promise<string[]>;
   searchServices(
     request?: DirectorySearchRequest,
     options?: DirectoryIterationOptions
@@ -188,44 +240,83 @@ export function createDirectoryClient(options: DirectoryClientOptions = {}): Dir
 
   return {
     environment,
+    search(request = {}, iteration = {}) {
+      const body = validateResourceSearchRequest(request);
+      const maxPages = optionalInteger(iteration.maxPages, "maxPages", 1, Number.MAX_SAFE_INTEGER);
+      const maxItems = optionalInteger(iteration.maxItems, "maxItems", 1, 10_000);
+      const pages = () =>
+        searchPages("/v1/directory/search", parseResult, body, maxPages, iteration.signal);
+      return { pages: { [Symbol.asyncIterator]: pages }, items: itemIterable(pages, maxItems) };
+    },
+    continueSearch(next, iteration = {}) {
+      const reference = requireText(next, "next", 1, 2048);
+      const maxPages = optionalInteger(iteration.maxPages, "maxPages", 1, Number.MAX_SAFE_INTEGER);
+      const maxItems = optionalInteger(iteration.maxItems, "maxItems", 1, 10_000);
+      const pages = () =>
+        searchPages(
+          "/v1/directory/search",
+          parseResult,
+          undefined,
+          maxPages,
+          iteration.signal,
+          reference
+        );
+      return { pages: { [Symbol.asyncIterator]: pages }, items: itemIterable(pages, maxItems) };
+    },
+    suggest(request) {
+      return suggestions("/v1/directory/suggestions", request);
+    },
     searchServices(request = {}, iteration = {}) {
       const body = validateSearchRequest(request);
       const maxPages = optionalInteger(iteration.maxPages, "maxPages", 1, Number.MAX_SAFE_INTEGER);
       const maxItems = optionalInteger(iteration.maxItems, "maxItems", 1, 10_000);
-      const pages = () => searchPages(body, maxPages, iteration.signal);
+      const pages = () =>
+        searchPages("/v1/services/search", parseService, body, maxPages, iteration.signal);
       return { pages: { [Symbol.asyncIterator]: pages }, items: itemIterable(pages, maxItems) };
     },
     continueSearchServices(next, iteration = {}) {
       const reference = requireText(next, "next", 1, 2048);
       const maxPages = optionalInteger(iteration.maxPages, "maxPages", 1, Number.MAX_SAFE_INTEGER);
       const maxItems = optionalInteger(iteration.maxItems, "maxItems", 1, 10_000);
-      const pages = () => searchPages(undefined, maxPages, iteration.signal, reference);
+      const pages = () =>
+        searchPages(
+          "/v1/services/search",
+          parseService,
+          undefined,
+          maxPages,
+          iteration.signal,
+          reference
+        );
       return { pages: { [Symbol.asyncIterator]: pages }, items: itemIterable(pages, maxItems) };
     },
-    async suggestServices(request) {
-      const prefix = requireText(request.prefix, "prefix", 1, 128);
-      const limit = optionalInteger(request.limit, "limit", 1, 25);
-      const url = new URL("/v1/services/suggestions", origin);
-      url.searchParams.set("prefix", prefix);
-      if (limit !== undefined) url.searchParams.set("limit", String(limit));
-      const value = await requestJson(url, {
-        method: "GET",
-        ...(request.signal === undefined ? {} : { signal: request.signal })
-      });
-      return parseSuggestions(value);
+    suggestServices(request) {
+      return suggestions("/v1/services/suggestions", request);
     }
   };
 
-  async function* searchPages(
+  async function suggestions(path: string, request: DirectorySuggestionRequest): Promise<string[]> {
+    const prefix = requireText(request.prefix, "prefix", 1, 128);
+    const limit = optionalInteger(request.limit, "limit", 1, 25);
+    const url = new URL(path, origin);
+    url.searchParams.set("prefix", prefix);
+    if (limit !== undefined) url.searchParams.set("limit", String(limit));
+    const value = await requestJson(url, {
+      method: "GET",
+      ...(request.signal === undefined ? {} : { signal: request.signal })
+    });
+    return parseSuggestions(value);
+  }
+
+  async function* searchPages<Item>(
+    path: string,
+    parseItem: (value: unknown) => Item,
     body: DirectorySearchRequest | undefined,
     maxPages: number | undefined,
     signal?: AbortSignal,
     continuation?: string
-  ): AsyncGenerator<DirectorySearchPage> {
+  ): AsyncGenerator<DirectorySearchPage<Item>> {
     let url =
-      continuation === undefined
-        ? new URL("/v1/services/search", origin)
-        : continuationUrl(continuation, origin);
+      continuation === undefined ? new URL(path, origin) : continuationUrl(continuation, origin);
     let init: RequestInit =
       body === undefined
         ? { method: "GET", ...(signal === undefined ? {} : { signal }) }
@@ -238,7 +329,7 @@ export function createDirectoryClient(options: DirectoryClientOptions = {}): Dir
     // traversal is no longer capped at 16.
     const visited = new Set<string>([String(url)]);
     for (let pageNumber = 0; ; pageNumber += 1) {
-      const page = parseSearchPage(await requestJson(url, init));
+      const page = parseSearchPage(await requestJson(url, init), parseItem);
       yield page;
       if (page.next === undefined) return;
       // The caller's own bound ends the sequence cleanly; the last yielded page still carries
@@ -364,10 +455,10 @@ async function discard(response: Response): Promise<void> {
 }
 
 /** Yields each item, stopping the instant the caller's budget is met. */
-function itemIterable(
-  pages: () => AsyncGenerator<DirectorySearchPage>,
+function itemIterable<Item>(
+  pages: () => AsyncGenerator<DirectorySearchPage<Item>>,
   maximum: number | undefined
-): AsyncIterable<DirectoryService> {
+): AsyncIterable<Item> {
   return {
     async *[Symbol.asyncIterator]() {
       let count = 0;
@@ -396,6 +487,85 @@ function validateSearchRequest(request: DirectorySearchRequest): DirectorySearch
   };
 }
 
+function validateResourceSearchRequest(
+  request: DirectoryResourceSearchRequest
+): DirectoryResourceSearchRequest {
+  const base = validateSearchRequest(request);
+  if (request.types === undefined) return base;
+  if (
+    !Array.isArray(request.types) ||
+    request.types.length === 0 ||
+    request.types.length > 2 ||
+    new Set(request.types).size !== request.types.length ||
+    request.types.some((type) => type !== "service" && type !== "collection")
+  )
+    throw new TypeError("types must contain distinct service or collection values");
+  return { ...base, types: [...request.types] };
+}
+
+function parseResult(value: unknown): DirectoryResult {
+  const object = requireObject(value, "Directory result");
+  const type = requireText(object["type"], "type", 1, 128);
+  if (type !== "service" && type !== "collection")
+    return { type: "unknown", resource_type: type, raw: { ...object } };
+  const serviceObject = requireObject(object["service"], "service");
+  const service: DirectoryIndexedService = {
+    ...parseService(serviceObject),
+    service_id: requireText(serviceObject["service_id"], "service_id", 1, 128)
+  };
+  const indexedAt = parseIndexedAt(object["indexed_at"]);
+  if (type === "service") {
+    const availableThrough =
+      object["available_through"] === undefined
+        ? undefined
+        : parseServiceReference(object["available_through"]);
+    return {
+      ...object,
+      type,
+      service,
+      indexed_at: indexedAt,
+      ...(availableThrough === undefined ? {} : { available_through: availableThrough })
+    };
+  }
+  const collection = requireObject(object["collection"], "collection");
+  const id = requireText(collection["id"], "collection.id", 1, 128);
+  if (!isLocalResourceIdentifier(id))
+    throw new TypeError("collection.id must be a local resource identifier");
+  const name = requireText(collection["name"], "collection.name", 1, 128);
+  const description = collection["description"];
+  if (description !== undefined && (typeof description !== "string" || description.length > 1024))
+    throw new TypeError("collection.description is invalid");
+  return {
+    ...object,
+    type,
+    service,
+    indexed_at: indexedAt,
+    collection: { ...collection, id, name, ...(description === undefined ? {} : { description }) }
+  };
+}
+
+function parseServiceReference(value: unknown): DirectoryServiceReference {
+  const object = requireObject(value, "available_through");
+  const serviceOrigin = requireText(object["service_origin"], "service_origin", 1, 2048);
+  const url = parseOrigin(serviceOrigin);
+  if (url.protocol !== "https:" || url.origin !== serviceOrigin || isPrivateHost(url.hostname))
+    throw new TypeError("Attribution origin must be a public HTTPS origin");
+  const name = optionalText(object["name"], "name", 128);
+  return {
+    ...object,
+    service_id: requireText(object["service_id"], "service_id", 1, 128),
+    service_origin: serviceOrigin,
+    ...(name === undefined ? {} : { name })
+  };
+}
+
+function parseIndexedAt(value: unknown): string {
+  const indexedAt = requireText(value, "indexed_at", 1, 64);
+  if (!RFC_3339.test(indexedAt) || Number.isNaN(Date.parse(indexedAt)))
+    throw new TypeError("indexed_at must be an RFC 3339 date-time");
+  return indexedAt;
+}
+
 function validateFilters(filters: DirectoryServiceFilters): DirectoryServiceFilters {
   return {
     ...(filters.keywords === undefined
@@ -414,18 +584,21 @@ function validateFilters(filters: DirectoryServiceFilters): DirectoryServiceFilt
   };
 }
 
-function parseSearchPage(value: unknown): DirectorySearchPage {
+function parseSearchPage<Item>(
+  value: unknown,
+  parseItem: (value: unknown) => Item
+): DirectorySearchPage<Item> {
   const object = requireObject(value, "Directory search page");
   if (!Array.isArray(object["items"]) || object["items"].length > MAXIMUM_ITEMS_PER_PAGE)
     throw new TypeError("Directory search page items are invalid");
   // One stale or nonconformant entry used to reject the whole page, which killed the generator and
   // made every other Service in the result set undiscoverable. Drop the entry, keep the page, and
   // tell the caller what was skipped.
-  const items: DirectoryService[] = [];
+  const items: Item[] = [];
   const issues: DirectoryIssue[] = [];
   object["items"].forEach((entry, index) => {
     try {
-      items.push(parseService(entry));
+      items.push(parseItem(entry));
     } catch (error) {
       issues.push({
         index,
@@ -472,11 +645,7 @@ function parseService(value: unknown): DirectoryService {
     ...(object["support_url"] === undefined ? {} : { support_url: object["support_url"] }),
     ...(object["website_url"] === undefined ? {} : { website_url: object["website_url"] })
   });
-  const indexedAt = requireText(object["indexed_at"], "indexed_at", 1, 64);
-  // `Date.parse` accepts implementation-defined formats such as "December 17, 1995", which breaks
-  // any consumer that compares or slices the value.
-  if (!RFC_3339.test(indexedAt) || Number.isNaN(Date.parse(indexedAt)))
-    throw new TypeError("indexed_at must be an RFC 3339 date-time");
+  const indexedAt = parseIndexedAt(object["indexed_at"]);
   const normalized = { ...object };
   // `protocols` is validated and reinstated below, but only when something survives filtering, so
   // the raw copy has to go first or an all-unknown block would pass straight through.
