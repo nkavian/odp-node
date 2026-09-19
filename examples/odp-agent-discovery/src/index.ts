@@ -26,7 +26,12 @@ for (const unavailable of mock.unavailable)
 
 const directory = createDirectoryClient({ environment: "sandbox", transport: mock.transport });
 let discovered = 0;
-for await (const service of directory.searchServices().items) {
+for await (const result of directory.search().items) {
+  if (result.type === "unknown") {
+    print("Unrecognized directory result", result);
+    continue;
+  }
+  const service = result.service;
   discovered += 1;
   const serviceUrl = mock.serviceUrlFor(service.service_origin);
   const client = createOdpServiceClient({
@@ -36,11 +41,18 @@ for await (const service of directory.searchServices().items) {
     initialPageSize: 2
   });
 
-  heading(`SERVICE ${discovered}: ${service.name}`);
-  print("Mock directory entry", service);
+  heading(
+    `${result.type.toUpperCase()} ${discovered}: ${result.type === "collection" ? result.collection.name : service.name}`
+  );
+  print("Mock directory entry", result);
 
   const inspection = await client.inspect();
   print("ODP Service document", inspection.document);
+
+  if (result.type === "collection") {
+    print("Full Collection response", await client.getCollection(result.collection.id));
+    continue;
+  }
 
   const page = await client.listOfferings().pages[Symbol.asyncIterator]().next();
   if (page.done) {

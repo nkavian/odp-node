@@ -38,7 +38,8 @@ try {
     "Marketplace Example",
     "ODP Service document:",
     "Terse Offering list response:",
-    "Full Offering response:"
+    "Full Offering response:",
+    "Full Collection response:"
   ])
     if (!result.includes(expected))
       throw new Error(`Agent walkthrough omitted ${JSON.stringify(expected)}:\n${result}`);
