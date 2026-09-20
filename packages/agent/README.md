@@ -2,6 +2,13 @@
 
 Agent-oriented composition across directory discovery and per-Service catalog discovery.
 
+For mixed Directory discovery, use `search()` from `@offering-protocol/directory`. A Collection
+result supplies its owning `service.service_origin` and `collection.id`; use those with
+`createOdpServiceClient({ serviceUrl: result.service.service_origin })`, inspect the Service, and
+call `getCollection(result.collection.id)` to obtain live details. A Directory entry is cached
+metadata, not the authoritative Collection. `createOdpAgent`'s cross-Service Offering search uses
+the Service-only `searchServices()` method; mixed search does not change that orchestration.
+
 ## Install
 
 ```sh
