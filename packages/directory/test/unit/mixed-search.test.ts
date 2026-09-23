@@ -4,6 +4,7 @@ import { createDirectoryClient, type DirectoryResourceSearchRequest } from "../.
 
 const indexedAt = "2026-09-18T12:00:00Z";
 const service = {
+  source: { type: "odp", url: "https://api.example.com/.well-known/odp", x402_discovery: false },
   service_id: "ca0304cc-ab28-43e5-af94-7bdf11b40c6e",
   service_origin: "https://api.example.com",
   name: "Example Service",

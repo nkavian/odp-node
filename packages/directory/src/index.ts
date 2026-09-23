@@ -26,6 +26,7 @@ export interface DirectoryClientOptions {
 }
 
 export interface DirectoryServiceFilters {
+  sources?: DirectorySourceType[];
   enrollment?: EnrollmentProtocol[];
   keywords?: string[];
   operations?: Array<{
@@ -56,8 +57,30 @@ export interface DirectoryServiceReference extends Record<string, unknown> {
   name?: string;
 }
 
-export interface DirectoryIndexedService extends DirectoryService {
+export type DirectorySourceType = "odp" | "openapi";
+
+export interface DirectorySource extends Record<string, unknown> {
+  type: string;
+  url: string;
+  x402_discovery: boolean;
+}
+
+export interface DirectoryIndexedService extends Record<string, unknown> {
   service_id: string;
+  service_origin: string;
+  source: DirectorySource;
+  name: string;
+  indexed_at: string;
+  description?: string;
+  documentation_url?: string;
+  language?: string;
+  localizations?: string[];
+  keywords?: string[];
+  operations?: OperationDescriptor[];
+  protocols?: ServiceProtocols;
+  status_url?: string;
+  support_url?: string;
+  website_url?: string;
 }
 
 export interface DirectoryServiceResult extends Record<string, unknown> {
@@ -528,9 +551,11 @@ function parseResult(value: unknown): DirectoryResult {
   if (type !== "service" && type !== "collection")
     return { type: "unknown", resource_type: type, raw: { ...object } };
   const serviceObject = requireObject(object["service"], "service");
+  const source = parseSource(serviceObject["source"]);
   const service: DirectoryIndexedService = {
-    ...parseService(serviceObject),
-    service_id: requireText(serviceObject["service_id"], "service_id", 1, 128)
+    ...(source.type === "odp" ? parseService(serviceObject) : parseImportedService(serviceObject)),
+    service_id: requireText(serviceObject["service_id"], "service_id", 1, 128),
+    source
   };
   const indexedAt = parseIndexedAt(object["indexed_at"]);
   if (type === "service") {
@@ -563,6 +588,102 @@ function parseResult(value: unknown): DirectoryResult {
   };
 }
 
+function parseSource(value: unknown): DirectorySource {
+  const object = requireObject(value, "source");
+  const type = requireText(object["type"], "source.type", 1, 128);
+  const address = requireText(object["url"], "source.url", 1, 2048);
+  const url = new URL(address);
+  if (
+    url.protocol !== "https:" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    address.includes("#") ||
+    isPrivateHost(url.hostname)
+  )
+    throw new TypeError(
+      "source.url must be a public HTTPS document URL without credentials or a fragment"
+    );
+  const discovery = object["x402_discovery"];
+  if (typeof discovery !== "boolean")
+    throw new TypeError("source.x402_discovery must be a boolean");
+  return { ...object, type, url: address, x402_discovery: discovery };
+}
+
+function parseImportedService(
+  object: Record<string, unknown>
+): Pick<DirectoryIndexedService, "service_origin" | "name" | "indexed_at"> &
+  Record<string, unknown> {
+  const reference = parseServiceReference(object);
+  const normalized = { ...object };
+  for (const member of [...UNVERIFIED_MEMBERS, "operations", "protocols"])
+    delete normalized[member];
+  for (const field of [
+    "description",
+    "documentation_url",
+    "language",
+    "status_url",
+    "support_url",
+    "website_url"
+  ]) {
+    if (object[field] !== undefined && typeof object[field] !== "string")
+      throw new TypeError(`${field} must be a string`);
+  }
+  for (const field of ["keywords", "localizations"]) {
+    const value = object[field];
+    if (value !== undefined) {
+      if (!Array.isArray(value)) throw new TypeError(`${field} must be an array of strings`);
+      const entries: unknown[] = value;
+      normalized[field] = entries.map((item) => {
+        if (typeof item !== "string") throw new TypeError(`${field} must be an array of strings`);
+        return item;
+      });
+    }
+  }
+  const protocols =
+    object["protocols"] === undefined ? undefined : parseImportedProtocols(object["protocols"]);
+  return {
+    ...normalized,
+    service_origin: reference.service_origin,
+    name: requireText(object["name"], "name", 1, 128),
+    indexed_at: parseIndexedAt(object["indexed_at"]),
+    ...(protocols === undefined ? {} : { protocols })
+  };
+}
+
+function parseImportedProtocols(value: unknown): ServiceProtocols {
+  const object = requireObject(value, "protocols");
+  const enrollment = recognizedDescriptors(object["enrollment"], ["aep"], parseEnrollment);
+  const payments = recognizedDescriptors(object["payments"], ["mpp", "x402"], parsePayment);
+  const trust = recognizedDescriptors(object["trust"], ["tap"], parseTrust);
+  const result: ServiceProtocols = {};
+  if (enrollment[0] !== undefined) result.enrollment = [enrollment[0]];
+  if (trust[0] !== undefined) result.trust = [trust[0]];
+  if (payments[0] !== undefined)
+    result.payments = payments[1] === undefined ? [payments[0]] : [payments[0], payments[1]];
+  return result;
+}
+
+function recognizedDescriptors<Value>(
+  value: unknown,
+  names: string[],
+  parse: (value: unknown) => Value
+): Value[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) throw new TypeError("protocol descriptors must be an array");
+  const result: Value[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    const descriptor = requireObject(entry, "protocol descriptor");
+    const name = requireText(descriptor["name"], "protocol name", 1, 128);
+    if (names.includes(name)) {
+      if (seen.has(name)) throw new TypeError("protocol names must be unique");
+      seen.add(name);
+      result.push(parse(entry));
+    }
+  }
+  return result;
+}
+
 function parseServiceReference(value: unknown): DirectoryServiceReference {
   const object = requireObject(value, "available_through");
   const serviceOrigin = requireText(object["service_origin"], "service_origin", 1, 2048);
@@ -587,6 +708,9 @@ function parseIndexedAt(value: unknown): string {
 
 function validateFilters(filters: DirectoryServiceFilters): DirectoryServiceFilters {
   return {
+    ...(filters.sources === undefined
+      ? {}
+      : { sources: uniqueEnums(filters.sources, "sources", ["odp", "openapi"] as const) }),
     ...(filters.keywords === undefined
       ? {}
       : { keywords: uniqueText(filters.keywords, "keywords", 32, 64) }),
