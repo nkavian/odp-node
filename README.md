@@ -61,6 +61,22 @@ pnpm add @offering-protocol/directory
 
 Use `npm install` or `yarn add` if those are the package managers in your application.
 
+## Cloudflare Workers
+
+To host an ODP catalog on Workers, start with the
+[Cloudflare Service example](./examples/odp-service-cloudflare/README.md). It includes a runnable
+Worker, the tested compatibility settings, and local tests. You do not need a Cloudflare account
+to run it locally.
+
+`core` ships precompiled validators: importing the package and validating ODP documents does not
+generate JavaScript or download schemas. The Service package uses those validators, and the
+Directory client uses the runtime's `fetch` API.
+
+The Agent package has additional requirements and does not have full Workers support. A
+compatibility date alone does not solve its transport and runtime-schema limitations; see
+[Agent on Workers](./packages/agent/README.md#cloudflare-workers). These limitations concern code
+executing inside Workers, not a Node.js application behind Cloudflare's proxy or firewall.
+
 ## Agent Workflow
 
 For general Directory discovery, use [`directory.search()`](./packages/directory/README.md#search-the-directory)

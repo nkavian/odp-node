@@ -23,7 +23,7 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,js,mjs,json,md,yml,yaml}\"",
     "format:check": "prettier --check \"**/*.{ts,js,mjs,json,md,yml,yaml}\"",
-    "typedoc": "typedoc",
+    "typedoc": "pnpm --filter @offering-protocol/core generate && typedoc",
     "conformance": "node scripts/run-conformance.mjs",
     "smoke:examples": "node scripts/smoke-examples.mjs",
     "verify": "pnpm format:check && pnpm typecheck && pnpm lint && pnpm test && pnpm coverage:changed && pnpm typedoc && pnpm build && pnpm verify:packages && pnpm smoke:examples && node scripts/benchmark.mjs",

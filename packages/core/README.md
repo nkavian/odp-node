@@ -49,6 +49,17 @@ names outside the declared ODP version. Agent readers use `parseAgentServiceDocu
 `safeParseAgentServiceDocument`; these filter unrecognized enrollment, payment, and trust
 descriptors before validating every recognized descriptor.
 
+## Runtime compatibility
+
+The npm package includes validators generated from the bundled ODP schemas during the SDK build.
+Your application runs those functions directly: it does not download ODP schemas or generate
+JavaScript when importing the package or validating a document.
+
+For Cloudflare Workers, follow the tested configuration in the
+[Workers example](../../examples/odp-service-cloudflare/README.md#use-it-in-your-worker).
+Precompiled core validators do not remove the Agent package's separate requirements for processing
+schemas published by Services.
+
 ## Resource Identity and References
 
 `createResourceIdentity` composes the Service origin, resource type, and Service-assigned local

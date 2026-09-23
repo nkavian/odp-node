@@ -4,6 +4,8 @@ dist/
 coverage/
 .conformance/
 .turbo/
+.generated/
+.wrangler/
 docs/
 *.tsbuildinfo
 

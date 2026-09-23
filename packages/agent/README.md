@@ -15,6 +15,31 @@ the Service-only `searchServices()` method; mixed search does not change that or
 npm install @offering-protocol/agent
 ```
 
+## Cloudflare Workers
+
+Use Node.js for the full Agent workflow. Running Node.js behind Cloudflare's proxy or firewall is
+different from executing this package inside a Cloudflare Worker.
+
+Inside Workers, two limitations remain even when core's bundled ODP validators can run:
+
+- The default HTTP transport uses Node.js networking features to validate destinations and pin
+  connections to the checked addresses. Workers does not implement every feature it uses. A
+  caller-supplied transport can enable individual requests, but replacing it with plain `fetch`
+  does not preserve all of those protections.
+- Reading Offering Attribute Schemas or resolving schema-backed Actions compiles Service-defined
+  JSON Schemas during the operation. Workers prohibits that request-time JavaScript compilation.
+  Allowing compilation at startup or choosing a newer compatibility date does not solve it.
+
+An Offering with an unusable Attribute Schema is returned without its attributes and with a scoped
+issue. An Action that needs an unresolved schema cannot be fully resolved. Do not treat successful
+Service inspection as proof that all Agent operations work in Workers.
+
+These restrictions do not disable normal schema retrieval on Node.js. The Agent retrieves the
+supporting documents it needs, subject to its existing network and resource limits.
+
+For hosting an ODP catalog rather than calling other Services, use the
+[Service package's Workers example](../../examples/odp-service-cloudflare/README.md).
+
 ## Discover Offerings Across Services
 
 `createOdpAgent` searches the canonical directory and then searches each matching Service. Results
