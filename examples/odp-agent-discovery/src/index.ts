@@ -32,6 +32,10 @@ for await (const result of directory.search().items) {
     continue;
   }
   const service = result.service;
+  if (service.source.type !== "odp") {
+    print("Non-ODP discovery document", service.source);
+    continue;
+  }
   discovered += 1;
   const serviceUrl = mock.serviceUrlFor(service.service_origin);
   const client = createOdpServiceClient({

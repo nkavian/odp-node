@@ -65,11 +65,14 @@ Use `npm install` or `yarn add` if those are the package managers in your applic
 
 For general Directory discovery, use [`directory.search()`](./packages/directory/README.md#search-the-directory)
 to receive typed Service and Collection results, and `directory.suggest()` to obtain matching names.
+Mixed results include native ODP and imported OpenAPI sources. Check `result.service.source.type`
+before using an ODP client; imported results provide their exact document URL in `source.url`.
+Search and suggestions accept `filters.sources` to select `odp`, `openapi`, or both.
 The Directory indexes submitted Collections, not every Offering in a Service's catalog. Its mixed
 search returns at most 100 results and currently has no continuation; refine queries to narrow results.
 
 `createOdpAgent` searches the canonical directory and then searches the live catalogs of matching
-Services. This orchestration uses `searchServices()`, the Service-only API, and does not interpret
+Services. This orchestration uses `searchServices()`, the native ODP Service-only API, and does not interpret
 mixed results as Services. Directory results never pretend to contain complete Service catalogs.
 
 ```ts

@@ -18,7 +18,7 @@ A fetch-compatible `transport` can be injected for testing without changing the 
 
 ## Search the Directory
 
-`search()` returns Services and explicitly indexed Collections. It searches cached names,
+`search()` returns native ODP Services, imported OpenAPI Services, and indexed Collections. It searches cached names,
 descriptions, and Service keywords; it does not crawl catalogs or search individual Offerings.
 Omit `types` to include both result types, or pass `["service"]` or `["collection"]`.
 
@@ -27,6 +27,10 @@ import { createDirectoryClient } from "@offering-protocol/directory";
 
 const directory = createDirectoryClient();
 for await (const result of directory.search({ query: "weather", limit: 25 }).items) {
+  if (result.type !== "unknown" && result.service.source.type !== "odp") {
+    showDiscoveryDocument(result.service.source);
+    continue;
+  }
   switch (result.type) {
     case "service":
       useService(result.service.service_origin);
@@ -41,11 +45,35 @@ for await (const result of directory.search({ query: "weather", limit: 25 }).ite
 }
 ```
 
-The example's `useService`, `useCollection`, and `reportUnsupportedType` functions represent your
-application's handling of a result. A Collection ID is scoped to its owning Service: two Services
-can both have a Collection named `weather`. Preserve the origin and ID together. Inspect the
-Service's live ODP document before fetching authoritative Collection details through
+The example's `showDiscoveryDocument`, `useService`, `useCollection`, and `reportUnsupportedType`
+functions represent your application's handling of a result. Preserve `service_id` and the Collection
+ID together: multiple imported Services can share an API origin but use different source documents.
+For an ODP result, inspect the Service's live ODP document before fetching Collection details through
 `createOdpServiceClient` from `@offering-protocol/agent`.
+
+Every known result includes `service.source`:
+
+```json
+{
+  "type": "openapi",
+  "url": "https://docs.example.com/v1/openapi.json?revision=2",
+  "x402_discovery": true
+}
+```
+
+`type` identifies the discovery format. `url` preserves the exact primary document URL, including
+its path and query; it can be hosted on a different origin than `service_origin`. `x402_discovery`
+indicates detected supporting `/.well-known/x402.json` metadata, not proof that an endpoint accepts
+x402. These fields are required; the client does not infer ODP when `source` is missing.
+
+For OpenAPI and unfamiliar source types, description, language, localizations, and keywords can be
+absent. The client does not manufacture these values or expose ODP `operations` on imported results.
+Unknown source types remain displayable; do not send them to an ODP Agent client. This package does
+not download or execute OpenAPI documents. An imported Collection is a Directory presentation group:
+use its parent's `source.url` for discovery, not ODP `getCollection(collection.id)`.
+
+Use `filters: { sources: ["odp"] }` for native ODP results or `["openapi"]` for imports. Omit `sources`
+for all sources, or specify both. An empty list, duplicates, and unsupported filter values are rejected.
 
 Each known result carries `service` metadata and `indexed_at`. For a Collection, the outer timestamp
 describes its indexed metadata; `service.indexed_at` describes its parent. A Service result can have
@@ -69,11 +97,17 @@ Known result types are validated; malformed entries appear in the page's `issues
 original indexes and are omitted from `items`. An unfamiliar type is instead preserved as
 `{ type: "unknown", resource_type, raw }`. Do not treat its unvalidated `raw` content as a Service
 or automatically follow URLs inside it. Additional fields on known results are tolerated. Nested
-Service metadata uses the validation policy documented below.
+Service metadata uses strict ODP validation when `source.type` is `odp`. Imported metadata is checked
+for its declared JSON types without requiring an ODP Service Document. Recognized protocol descriptors
+are validated and unknown protocol names are ignored. Unvalidated ODP document fields such as `http`
+and `mcp` are not exposed. Reading results never contacts their source documents or endpoints.
 
 ## Search for Services only
 
-`searchServices()` covers cached Service metadata, not Collections or Service catalogs. Filter values within one
+`searchServices()` covers native ODP Service metadata, not imported Services, Collections, or catalogs.
+To list Services across source formats, use `search({ types: ["service"] })`. A source filter does
+not broaden `searchServices()` beyond ODP; filtering it to OpenAPI returns no matches.
+Filter values within one
 category use OR semantics; different categories combine with AND semantics. The initial page can
 include facets for keywords, enrollment protocols, payment protocols, individual protocol payment
 options, trust protocols, and ODP operation descriptors.
@@ -142,13 +176,14 @@ substring search, despite the input parameter being named `prefix`. For example,
 const names = await directory.suggest({
   prefix: "we",
   limit: 10,
-  filters: { payments: [{ name: "mpp", options: ["inflow"] }] }
+  filters: { sources: ["openapi"], payments: [{ name: "mpp", options: ["inflow"] }] }
 });
 // Use a selected name as the query for directory.search().
 ```
 
 The endpoint is `POST /v1/directory/suggestions`. Optional `filters` use the same structure as search,
-including keywords, AEP, ODP operations, payments, and trust. Collection filters apply to their owning
+including sources, keywords, AEP, ODP operations, payments, and trust. An ODP operation filter does
+not match an imported Service simply because it has OpenAPI endpoints. Collection filters apply to their owning
 Service. Suggestions are deduplicated search strings, not
 resource identifiers. They do not tell you which target type supplied each name. The server ranks
 names by the total number of matching index rows, then alphabetically, and returns at most 25.

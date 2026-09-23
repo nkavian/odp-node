@@ -31,6 +31,7 @@ export async function createMockDirectory(serviceUrls: string[]): Promise<MockDi
       const document = inspection.document;
       const serviceOrigin = `https://service-${index + 1}.mock-directory.example`;
       const service: DirectoryIndexedService = {
+        source: { type: "odp", url: `${serviceOrigin}/.well-known/odp`, x402_discovery: false },
         service_id: randomUUID(),
         service_origin: serviceOrigin,
         name: document.name,

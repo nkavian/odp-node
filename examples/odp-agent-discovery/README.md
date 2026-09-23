@@ -25,5 +25,5 @@ Unreachable URLs are skipped. The example calls `directory.search()` and branche
 `type`. For a Service result, it prints the mock entry, validated ODP Service document, first terse
 Offering page, and full details for the first Offering. For a Collection result, it prints the entry,
 inspects the owning Service, and fetches the live Collection using that Service and Collection ID.
-Unknown result types are reported without contacting their contents. The marketplace example
+Unknown result types and non-ODP sources are reported without contacting their contents. The marketplace example
 provides Collections, so run it to exercise both known result types.
