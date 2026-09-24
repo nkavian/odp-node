@@ -15,6 +15,17 @@ surface of every package. Scope an individual task with a Turbo filter when iter
 pnpm turbo run typecheck --filter=@offering-protocol/core
 ```
 
+## Core validators
+
+Core's `generate` command compiles the JSON Schemas in `packages/core/src/schemas` into
+`packages/core/.generated`. Build, test, lint, typecheck, and TypeDoc commands run generation when
+needed. Generated files are untracked and are bundled into the published JavaScript; consumers do
+not run the generator. Edit the schemas or generation script, not the generated output.
+
+Core tests compare generated validators with Ajv and check that they preserve results and errors.
+Publication checks load both ESM and CommonJS with string-based code generation disabled. The
+Cloudflare example tests run the built Service in `workerd`, with startup code generation disabled.
+
 ## Dependency updates
 
 Refresh dependencies throughout the workspace to the newest versions allowed by their declared

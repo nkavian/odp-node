@@ -1,4 +1,4 @@
-import type { ErrorObject } from "ajv";
+import type { ErrorObject, ValidateFunction } from "ajv";
 import { parse as parseLanguageTag } from "bcp-47";
 
 import type {
@@ -15,7 +15,7 @@ import type {
   SortDefinition
 } from "./models.js";
 import { PAYMENT_OPTIONS } from "./models.js";
-import { ajv } from "./schema-registry.js";
+import * as validators from "../.generated/validators.js";
 
 function isLanguageTag(value: string): boolean {
   const parsed = parseLanguageTag(value, { normalize: false });
@@ -196,15 +196,10 @@ function filterDefinitionIssues(value: FilterDefinition): ValidationIssue[] {
 }
 
 function validator<Value>(
-  schemaId: string,
+  validate: ValidateFunction<unknown>,
   documentType: string,
   refine?: (value: Value) => ValidationIssue[]
 ) {
-  const validate = ajv.getSchema<Value>(schemaId);
-  if (validate === undefined) {
-    throw new Error(`Missing bundled ODP schema: ${schemaId}`);
-  }
-
   const safeParse = (value: unknown): SafeParseResult<Value> => {
     if (validate(value)) {
       const data = value as Value;
@@ -225,7 +220,7 @@ function validator<Value>(
 }
 
 const serviceDocument = validator<ServiceDocument>(
-  "https://offeringprotocol.org/schemas/service-document.schema.json",
+  validators.serviceDocument,
   "Service Document",
   serviceDocumentIssues
 );
@@ -600,56 +595,42 @@ export function parseAgentServiceDocument(value: unknown): ServiceDocument {
 export function safeParseAgentServiceDocument(value: unknown): SafeParseResult<ServiceDocument> {
   return serviceDocument.safeParse(agentServiceDocumentValue(value));
 }
-const collection = validator<Collection>(
-  "https://offeringprotocol.org/schemas/collection.schema.json",
-  "Collection",
-  representationIssues
-);
-const offering = validator<Offering>(
-  "https://offeringprotocol.org/schemas/offering.schema.json",
-  "Offering",
-  representationIssues
-);
+const collection = validator<Collection>(validators.collection, "Collection", representationIssues);
+const offering = validator<Offering>(validators.offering, "Offering", representationIssues);
 const problemDetails = validator<ProblemDetails>(
-  "https://offeringprotocol.org/schemas/problem-details.schema.json",
+  validators.problemDetails,
   "Problem Details",
   problemDetailsIssues
 );
 const resourceIdentity = validator<ResourceIdentity>(
-  "https://offeringprotocol.org/schemas/resource-identity.schema.json",
+  validators.resourceIdentity,
   "resource identity"
 );
-const page = validator<PageEnvelope>(
-  "https://offeringprotocol.org/schemas/page-envelope.schema.json",
-  "page envelope"
-);
+const page = validator<PageEnvelope>(validators.page, "page envelope");
 const collectionSearchRequest = validator<CollectionSearchRequest>(
-  "https://offeringprotocol.org/schemas/collection-search-request.schema.json",
+  validators.collectionSearchRequest,
   "Collection search request"
 );
 const offeringSearchRequest = validator<OfferingSearchRequest>(
-  "https://offeringprotocol.org/schemas/offering-search-request.schema.json",
+  validators.offeringSearchRequest,
   "Offering search request"
 );
 const offeringSearchResponse = validator<OfferingPage>(
-  "https://offeringprotocol.org/schemas/offering-search-response.schema.json",
+  validators.offeringSearchResponse,
   "Offering search response"
 );
 const filterDefinition = validator<FilterDefinition>(
-  "https://offeringprotocol.org/schemas/filter-definition.schema.json",
+  validators.filterDefinition,
   "Filter Definition",
   filterDefinitionIssues
 );
-const sortDefinition = validator<SortDefinition>(
-  "https://offeringprotocol.org/schemas/sort-definition.schema.json",
-  "Sort Definition"
-);
+const sortDefinition = validator<SortDefinition>(validators.sortDefinition, "Sort Definition");
 const filterDefinitionPage = validator<PageEnvelope<FilterDefinition>>(
-  "https://offeringprotocol.org/schemas/filter-definition-page.schema.json",
+  validators.filterDefinitionPage,
   "Filter Definition page"
 );
 const sortDefinitionPage = validator<PageEnvelope<SortDefinition>>(
-  "https://offeringprotocol.org/schemas/sort-definition-page.schema.json",
+  validators.sortDefinitionPage,
   "Sort Definition page"
 );
 

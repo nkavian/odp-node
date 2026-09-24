@@ -4,6 +4,7 @@ import { execFile } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
+import { pathToFileURL } from "node:url";
 
 const execFileAsync = promisify(execFile);
 const root = path.resolve(import.meta.dirname, "..");
@@ -21,7 +22,7 @@ const packages = {
     "ipaddr.js",
     "undici"
   ],
-  core: ["ajv", "ajv-formats", "bcp-47"],
+  core: ["bcp-47"],
   directory: ["@offering-protocol/core"],
   service: ["@offering-protocol/core"]
 };
@@ -78,6 +79,9 @@ async function verifyPackage(directory, expectedDependencies) {
   for (const required of requiredFiles) {
     if (!files.has(required)) throw new Error(`${directory}: tarball is missing ${required}`);
   }
+  if (directory === "core" && !files.has("THIRD-PARTY-NOTICES.md")) {
+    throw new Error("core: tarball is missing bundled dependency licenses");
+  }
   for (const file of files) {
     if (file.startsWith("src/") || file.startsWith("test/")) {
       throw new Error(`${directory}: tarball exposes ${file}`);
@@ -87,6 +91,22 @@ async function verifyPackage(directory, expectedDependencies) {
 
 for (const [directory, dependencies] of Object.entries(packages)) {
   await verifyPackage(directory, dependencies);
+}
+
+for (const file of ["index.js", "index.cjs"]) {
+  const entry = pathToFileURL(path.join(root, "packages/core/dist", file)).href;
+  await execFileAsync(process.execPath, [
+    "--disallow-code-generation-from-strings",
+    "--input-type=module",
+    "--eval",
+    `import assert from "node:assert/strict";
+     const core = await import(${JSON.stringify(entry)});
+     const offering = {odp_version: "1.0", id: "template", name: "Template"};
+     assert.deepEqual(core.parseOffering(offering), offering);
+     for (const [name, validate] of Object.entries(core)) {
+       if (name.startsWith("safeParse")) assert.equal(validate(null).success, false, name);
+     }`
+  ]);
 }
 
 console.log("Package publication surfaces OK");

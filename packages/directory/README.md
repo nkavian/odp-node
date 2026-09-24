@@ -16,6 +16,15 @@ The package has two environments and no configurable base URL:
 
 A fetch-compatible `transport` can be injected for testing without changing the selected origin.
 
+## Cloudflare Workers
+
+The Directory client uses the runtime's `fetch` API. Call it from a Worker request handler, where
+outbound requests are allowed, and use the Node compatibility settings from the
+[Workers example](../../examples/odp-service-cloudflare/README.md#use-it-in-your-worker).
+
+Directory search does not resolve Offering Attribute Schemas. Navigating a Service through the
+Agent package has [additional Workers limitations](../agent/README.md#cloudflare-workers).
+
 ## Search the Directory
 
 `search()` returns native ODP Services, imported OpenAPI Services, and indexed Collections. It searches cached names,

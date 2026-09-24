@@ -3,6 +3,8 @@
 The examples exercise the published package APIs rather than importing package internals.
 
 - `odp-service-small` demonstrates configuration-first integration for a small catalog.
+- [`odp-service-cloudflare`](./odp-service-cloudflare/README.md) hosts a public catalog in a
+  Cloudflare Worker, with local tests and deployment instructions.
 - `odp-service-marketplace` demonstrates storage-style handlers and bounded virtual scale.
 - `odp-agent-discovery` builds an explicit mock directory from reachable configured Services and
   walks through their discovery responses.
@@ -10,8 +12,8 @@ The examples exercise the published package APIs rather than importing package i
   payment.
 - `odp-service-x402` exposes an ODP Action protected by x402.
 
-Each runnable package includes `.env.example`. Copy it to `.env` to make local configuration
-explicit; `.env` remains untracked.
+The Node server examples include `.env.example`. Copy it to `.env` to make local configuration
+explicit; `.env` remains untracked. The Cloudflare example uses `wrangler.json` and needs no secrets.
 
 Build and exercise the complete flow with:
 

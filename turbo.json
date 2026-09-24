@@ -5,21 +5,49 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "tsconfig.json", "tsup.config.ts", "package.json"],
+      "inputs": [
+        "src/**",
+        "scripts/**",
+        "tsconfig.json",
+        "tsup.config.ts",
+        "wrangler.json",
+        "package.json"
+      ],
       "outputs": ["dist/**"]
     },
     "lint": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "test/**", "tsconfig.json", "tsconfig.test.json"]
+      "inputs": [
+        "src/**",
+        "scripts/**",
+        "test/**",
+        "tsconfig.json",
+        "tsconfig.test.json",
+        "package.json"
+      ]
     },
     "typecheck": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "test/**", "tsconfig.json", "tsconfig.test.json"],
+      "inputs": [
+        "src/**",
+        "scripts/**",
+        "test/**",
+        "tsconfig.json",
+        "tsconfig.test.json",
+        "package.json"
+      ],
       "outputs": []
     },
     "test": {
       "dependsOn": ["^build"],
-      "inputs": ["src/**", "test/**", "vitest.config.ts"],
+      "inputs": [
+        "src/**",
+        "scripts/**",
+        "test/**",
+        "vitest.config.ts",
+        "wrangler.json",
+        "package.json"
+      ],
       "outputs": []
     },
     "clean": {

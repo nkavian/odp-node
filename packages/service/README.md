@@ -23,6 +23,20 @@ Responses are validated against the protocol's byte and nesting-depth limits bef
 Service: a catalog that produces an over-limit document gets a `500` here rather than a truncated
 read at the Agent.
 
+## Cloudflare Workers
+
+The [Workers example](../../examples/odp-service-cloudflare/README.md) shows how to export a Worker
+request handler, configure Node compatibility, run locally, and deploy. Core's ODP validators ship
+as ordinary JavaScript functions, so your Worker does not compile schemas at startup or fetch them
+from the protocol website.
+
+Use this package to expose your own catalog. You do not need the Agent package to host a Service.
+
+If you use `createStaticCatalog`, initialize it from a Worker request handler and supply a stable
+`continuationKey` from a Worker secret. Without that key, the helper generates random bytes, which
+Workers forbids during module initialization. Share the key across instances so pagination cursors
+remain usable when a later request reaches another instance.
+
 ## Small catalogs
 
 `createStaticCatalog` provides the required `list-offerings` and `get-offering` operations from a
