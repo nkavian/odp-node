@@ -1,5 +1,16 @@
 # @offering-protocol/directory
 
+## 0.3.0
+
+### Minor Changes
+
+- [#59](https://github.com/offering-protocol/odp-node/pull/59) [`270e8b4`](https://github.com/offering-protocol/odp-node/commit/270e8b433a70892b72a7a56af5f015a8a75d51f1) Thanks [@nkavian](https://github.com/nkavian)! - Support source-aware Directory discovery and source filters for search and suggestions. Mixed results include the exact discovery document URL and allow imported metadata to be absent. Native ODP Service search retains its existing validation contract.
+
+### Patch Changes
+
+- Updated dependencies [[`7f1d59b`](https://github.com/offering-protocol/odp-node/commit/7f1d59b5c86351d4a64dceb76c5919ab1cf4d42b)]:
+  - @offering-protocol/core@0.3.8
+
 ## 0.2.6
 
 ### Patch Changes
