@@ -22,13 +22,13 @@ different from executing this package inside a Cloudflare Worker.
 
 Inside Workers, two limitations remain even when core's bundled ODP validators can run:
 
-- The default HTTP transport uses Node.js networking features to validate destinations and pin
-  connections to the checked addresses. Workers does not implement every feature it uses. A
-  caller-supplied transport can enable individual requests, but replacing it with plain `fetch`
-  does not preserve all of those protections.
-- Reading Offering Attribute Schemas or resolving schema-backed Actions compiles Service-defined
-  JSON Schemas during the operation. Workers prohibits that request-time JavaScript compilation.
-  Allowing compilation at startup or choosing a newer compatibility date does not solve it.
+- **Networking:** Cloudflare Workers do not support all the Node.js networking features used by the
+  Agent's default HTTP transport. Replacing that transport with plain `fetch` does not preserve all
+  its destination-validation protections.
+- **Service-provided schemas:** The Agent retrieves schemas from target Services to validate
+  Offering attributes and resolve Actions. Processing those schemas requires generating JavaScript
+  during the request, which Cloudflare Workers prohibit. Precompiling the SDK's bundled ODP schemas
+  does not address these separately retrieved schemas.
 
 An Offering with an unusable Attribute Schema is returned without its attributes and with a scoped
 issue. An Action that needs an unresolved schema cannot be fully resolved. Do not treat successful
