@@ -1,5 +1,11 @@
 # @offering-protocol/core
 
+## 0.3.8
+
+### Patch Changes
+
+- [#61](https://github.com/offering-protocol/odp-node/pull/61) [`7f1d59b`](https://github.com/offering-protocol/odp-node/commit/7f1d59b5c86351d4a64dceb76c5919ab1cf4d42b) Thanks [@nkavian](https://github.com/nkavian)! - Precompile bundled ODP validators so document validation works in runtimes that prohibit dynamic JavaScript code generation, including Cloudflare Workers.
+
 ## 0.3.7
 
 ### Patch Changes
