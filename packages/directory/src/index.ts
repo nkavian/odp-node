@@ -916,7 +916,7 @@ function parsePaymentFilters(value: unknown): NonNullable<DirectoryServiceFilter
       const options =
         object["options"] === undefined
           ? undefined
-          : uniqueEnums(object["options"], "payment options", PAYMENT_OPTIONS);
+          : uniqueEnums(object["options"], "payment options", PAYMENT_OPTIONS, 16);
       if (Object.keys(object).some((key) => !["authentication", "name", "options"].includes(key)))
         throw new TypeError("payment filter contains unknown fields");
       return {
@@ -969,7 +969,7 @@ function parsePayment(value: unknown): PaymentProtocol {
   const options =
     object["options"] === undefined
       ? undefined
-      : uniqueEnums(object["options"], "payment options", PAYMENT_OPTIONS);
+      : uniqueEnums(object["options"], "payment options", PAYMENT_OPTIONS, 16);
   return {
     authentication: requireEnum(object["authentication"], "payment authentication", [
       "not-required",
@@ -1056,9 +1056,10 @@ function requireEnum<Value extends string>(
 function uniqueEnums<Value extends string>(
   value: unknown,
   name: string,
-  allowed: readonly Value[]
+  allowed: readonly Value[],
+  maximum = allowed.length
 ): Value[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > allowed.length)
+  if (!Array.isArray(value) || value.length === 0 || value.length > maximum)
     throw new TypeError(`${name} are invalid`);
   const values = value.map((item) => requireEnum(item, name, allowed));
   if (new Set(values).size !== values.length) throw new TypeError(`${name} must be unique`);

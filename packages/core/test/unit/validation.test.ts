@@ -139,7 +139,7 @@ describe("Service Document validation", () => {
           {
             authentication: "not-required",
             name: "mpp",
-            options: ["card", "inflow", "solana"]
+            options: ["arc", "card", "inflow", "monad", "solana"]
           }
         ]
       }
@@ -237,7 +237,7 @@ describe("Agent response compatibility", () => {
               {
                 authentication: "not-required",
                 name: "mpp",
-                options: ["inflow", "future"]
+                options: ["arc", "inflow", "monad", "future"]
               }
             ]
           },
@@ -263,7 +263,9 @@ describe("Agent response compatibility", () => {
       mcp: [{ type: "streamable-http", url: "/mcp" }],
       branding: { logo: { src: "/logo", type: "image/png" } },
       protocols: {
-        payments: [{ authentication: "not-required", name: "mpp", options: ["inflow"] }]
+        payments: [
+          { authentication: "not-required", name: "mpp", options: ["arc", "inflow", "monad"] }
+        ]
       },
       search_capabilities: {
         filters: { inline: [{ type: "string", operators: ["eq"] }] },

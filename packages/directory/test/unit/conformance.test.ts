@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { PAYMENT_OPTIONS } from "@offering-protocol/core";
+
 import {
   createDirectoryClient,
   DirectoryRequestError,
@@ -174,6 +176,34 @@ describe("directory traversal", () => {
 });
 
 describe("directory result parsing", () => {
+  it.each(["arc", "monad"] as const)(
+    "preserves %s in filters, results and facets",
+    async (option) => {
+      const payment = {
+        authentication: "not-required" as const,
+        name: "x402" as const,
+        options: [option]
+      };
+      const facets = {
+        payments: [{ value: payment, count: 1 }],
+        payment_options: [{ value: { name: "x402", option }, count: 1 }]
+      };
+      const transport = transportFor((_url, init) => {
+        expect(JSON.parse(typeof init.body === "string" ? init.body : "null")).toMatchObject({
+          filters: { payments: [payment] }
+        });
+        return json({ items: [{ ...service, protocols: { payments: [payment] } }], facets });
+      });
+      const pages = await collect(
+        createDirectoryClient({ transport }).searchServices({
+          filters: { payments: [payment] }
+        }).pages
+      );
+      expect(pages[0]?.items[0]?.protocols?.payments).toEqual([payment]);
+      expect(pages[0]?.facets).toEqual(facets);
+    }
+  );
+
   it("drops an unusable entry and reports it rather than failing the page", async () => {
     const transport = transportFor(() =>
       json({
@@ -394,6 +424,34 @@ describe("directory result parsing", () => {
 });
 
 describe("directory request validation", () => {
+  it("keeps the payment option limit at sixteen", async () => {
+    for (const length of [16, 17]) {
+      const payment = {
+        authentication: "not-required" as const,
+        name: "x402" as const,
+        options: PAYMENT_OPTIONS.slice(0, length)
+      };
+      const client = createDirectoryClient({
+        transport: transportFor(() =>
+          json({ items: [{ ...service, protocols: { payments: [payment] } }] })
+        )
+      });
+      if (length === 16) {
+        const result = await collect(
+          client.searchServices({ filters: { payments: [payment] } }).pages
+        );
+        expect(result[0]?.items[0]?.protocols?.payments).toEqual([payment]);
+      } else {
+        expect(() => client.searchServices({ filters: { payments: [payment] } })).toThrow(
+          "payment options"
+        );
+      }
+      const unfiltered = collect(client.searchServices().pages);
+      if (length === 16) expect((await unfiltered)[0]?.items).toHaveLength(1);
+      else expect((await unfiltered)[0]?.items).toHaveLength(0);
+    }
+  });
+
   function sentBody(handler: (body: Record<string, unknown>) => void): DirectoryTransport {
     return transportFor((_url, init) => {
       handler(
