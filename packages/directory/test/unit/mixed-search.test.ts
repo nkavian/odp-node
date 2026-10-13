@@ -281,7 +281,9 @@ describe("mixed Directory discovery", () => {
       enrollment: [{ name: "aep" as const }],
       keywords: ["weather"],
       operations: [{ name: "get-offering" as const }],
-      payments: [{ name: "mpp" as const, options: ["inflow" as const] }],
+      payments: [
+        { name: "mpp" as const, options: ["arc" as const, "inflow" as const, "monad" as const] }
+      ],
       trust: [{ name: "tap" as const }]
     };
     expect(await client.suggest({ prefix: "we", filters })).toEqual(["Weather"]);
