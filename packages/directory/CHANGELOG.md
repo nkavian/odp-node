@@ -1,5 +1,14 @@
 # @offering-protocol/directory
 
+## 0.4.1
+
+### Patch Changes
+
+- [#67](https://github.com/offering-protocol/odp-node/pull/67) [`f5c95a1`](https://github.com/offering-protocol/odp-node/commit/f5c95a16ac086659aadd5f554af7dfd59ae7d43c) Thanks [@nkavian](https://github.com/nkavian)! - Support Arc and Monad payment options in Service advertisements, Agent discovery, and Directory filters and results.
+
+- Updated dependencies [[`f5c95a1`](https://github.com/offering-protocol/odp-node/commit/f5c95a16ac086659aadd5f554af7dfd59ae7d43c)]:
+  - @offering-protocol/core@0.4.0
+
 ## 0.4.0
 
 ### Minor Changes
