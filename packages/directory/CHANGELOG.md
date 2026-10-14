@@ -1,5 +1,11 @@
 # @offering-protocol/directory
 
+## 0.4.2
+
+### Patch Changes
+
+- [#68](https://github.com/offering-protocol/odp-node/pull/68) [`a906d71`](https://github.com/offering-protocol/odp-node/commit/a906d71941b6a90db9f07107b0b9594e140aeeda) Thanks [@nkavian](https://github.com/nkavian)! - Use directory.offeringprotocol.org for production Directory API requests. Keep the sandbox API origin unchanged.
+
 ## 0.4.1
 
 ### Patch Changes
