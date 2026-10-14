@@ -91,7 +91,7 @@ describe("Directory client", () => {
       result = page.items[0];
       break;
     }
-    expect(requestUrl).toBe("https://api.inflowpay.ai/v1/services/search");
+    expect(requestUrl).toBe("https://directory.offeringprotocol.org/v1/services/search");
     expect(body).toEqual({
       query: "compute",
       filters: {

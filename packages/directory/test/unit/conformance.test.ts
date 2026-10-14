@@ -356,7 +356,7 @@ describe("directory result parsing", () => {
       });
     });
     await collect(createDirectoryClient({ transport }).searchServices().pages);
-    expect(reached).toEqual(["https://api.inflowpay.ai"]);
+    expect(reached).toEqual(["https://directory.offeringprotocol.org"]);
   });
 
   it("parses every facet shape the directory can return", async () => {
