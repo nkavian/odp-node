@@ -162,7 +162,7 @@ test("uses the Workers fetch API for Directory requests", async () => {
     assert.deepEqual(await response.json(), [{ items: [service], count: 1 }]);
     assert.deepEqual(requests, [
       {
-        url: "https://api.inflowpay.ai/v1/services/search",
+        url: "https://directory.offeringprotocol.org/v1/services/search",
         method: "POST",
         body: { query: "templates" }
       }

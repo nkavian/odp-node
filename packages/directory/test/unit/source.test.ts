@@ -43,7 +43,7 @@ describe("source-aware Directory discovery", () => {
     expect(await collect(client.search().pages)).toEqual([{ items: [result, collection] }]);
     expect(transport).toHaveBeenCalledTimes(1);
     expect(inputUrl(transport.mock.calls[0]?.[0])).toBe(
-      "https://api.inflowpay.ai/v1/directory/search"
+      "https://directory.offeringprotocol.org/v1/directory/search"
     );
   });
 

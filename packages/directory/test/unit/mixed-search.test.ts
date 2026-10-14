@@ -79,7 +79,7 @@ describe("mixed Directory discovery", () => {
       }
     ]);
     const [url, init] = transport.mock.calls[0] ?? [];
-    expect(inputUrl(url)).toBe("https://api.inflowpay.ai/v1/directory/search");
+    expect(inputUrl(url)).toBe("https://directory.offeringprotocol.org/v1/directory/search");
     expect(init?.method).toBe("POST");
     expect(bodyOf(init)).toEqual({
       query: "weather",
@@ -257,7 +257,7 @@ describe("mixed Directory discovery", () => {
       "Atlas"
     ]);
     expect(inputUrl(transport.mock.calls[0]?.[0])).toBe(
-      "https://api.inflowpay.ai/v1/directory/suggestions"
+      "https://directory.offeringprotocol.org/v1/directory/suggestions"
     );
     expect(transport.mock.calls[0]?.[1]?.method).toBe("POST");
     const body = transport.mock.calls[0]?.[1]?.body;
@@ -268,7 +268,7 @@ describe("mixed Directory discovery", () => {
     expect(transport.mock.calls[0]?.[1]?.signal).toBe(signal);
     await client.suggestServices({ prefix: "we" });
     expect(inputUrl(transport.mock.calls[1]?.[0])).toBe(
-      "https://api.inflowpay.ai/v1/services/suggestions?prefix=we"
+      "https://directory.offeringprotocol.org/v1/services/suggestions?prefix=we"
     );
     await expect(client.suggest({ prefix: " " })).rejects.toThrow("prefix");
     await expect(client.suggest({ prefix: "we", limit: 26 })).rejects.toThrow("limit");

@@ -13,7 +13,7 @@ import {
 } from "@offering-protocol/core";
 
 export const DIRECTORY_ORIGINS = Object.freeze({
-  production: "https://api.inflowpay.ai",
+  production: "https://directory.offeringprotocol.org",
   sandbox: "https://sandbox.inflowpay.ai"
 });
 
